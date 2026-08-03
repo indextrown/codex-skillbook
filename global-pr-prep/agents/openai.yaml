@@ -1,0 +1,4 @@
+interface:
+  display_name: "PR 준비 패키지"
+  short_description: "PR 브랜치·수정 위치·명령·본문을 한 번에 준비"
+  default_prompt: "Use $global-pr-prep to prepare branch, commit, push, and PR text for this change."

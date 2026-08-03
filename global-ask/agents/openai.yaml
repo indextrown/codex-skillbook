@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Ask"
+  short_description: "에러와 코드 질문 학습 가이드"
+  default_prompt: "Use $global-ask to explain code errors, warnings, and better approaches step by step without modifying files."

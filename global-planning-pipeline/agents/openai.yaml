@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Planning Pipeline"
+  short_description: "계획 요청용 3단계 검토"
+  default_prompt: "Use $global-planning-pipeline to review this request with Researcher, Planner, and Reviewer perspectives before implementation."

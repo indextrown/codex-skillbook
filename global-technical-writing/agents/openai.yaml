@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Technical Writing"
+  short_description: "기술 문서 유형 선택, 구조 개선, 새 페이지 생성"
+  default_prompt: "Use $global-technical-writing to choose the right technical document type, improve structure and wording, or generate a new developer-facing document draft with section, title, description, and sidebar metadata."

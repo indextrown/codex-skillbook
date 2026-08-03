@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Auto PR"
+  short_description: "PR 작성과 GitHub 게시"
+  default_prompt: "Use $global-auto-pr to inspect commits, draft a repository-appropriate PR body, and create the pull request."
