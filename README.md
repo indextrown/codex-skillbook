@@ -54,9 +54,9 @@ README의 한국어 문장을 다듬어줘.
 Codex 앱에서 대상 저장소를 열고 작업 내용을 입력합니다. CLI와 마찬가지로 `$`를 붙인 스킬 이름으로 원하는 워크플로우를 바로 지정할 수 있습니다.
 
 ```text
-$global-branch-planning-pipeline
+$global-planning-pipeline
 
-이슈를 만들고 PR까지 준비해줘.
+로그인 후 앱이 멈추는 문제의 원인을 점검하고 수정 계획을 세워줘.
 ```
 
 ## 설치, 업데이트 및 삭제
