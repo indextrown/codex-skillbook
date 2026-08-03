@@ -1,0 +1,4 @@
+interface:
+  display_name: "한글 AI 티 제거"
+  short_description: "AI 번역투와 기계적인 문장을 자연스러운 한국어로 윤문"
+  default_prompt: "$global-humanize-korean을 사용해 이 한국어 글의 의미와 말투를 지키면서 AI 티를 제거해 주세요."

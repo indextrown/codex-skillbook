@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Branch Planning Pipeline"
+  short_description: "Plan, branch, and PR workflow orchestration"
+  default_prompt: "Use $global-branch-planning-pipeline to structure this implementation into the right issue, branch, commit, and PR flow for the current repository."

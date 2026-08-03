@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Auto Commit"
+  short_description: "변경사항 커밋과 선택적 푸시"
+  default_prompt: "Use $global-auto-commit to inspect repository changes, stage related files, commit with the repository's message convention, and push only if requested."
