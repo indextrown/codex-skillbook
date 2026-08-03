@@ -1,0 +1,57 @@
+name: Release with Notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, e.g. 1.0.0'
+        required: true
+        type: string
+      target_branch:
+        description: 'Branch to release from'
+        required: true
+        default: main
+        type: string
+      release_mode:
+        description: 'latest publishes immediately; draft stays unpublished'
+        required: true
+        default: latest
+        type: choice
+        options:
+          - latest
+          - draft
+
+run-name: '${{ inputs.release_mode }} v${{ inputs.version }} from ${{ inputs.target_branch }}'
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-with-notes-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Create ${{ inputs.release_mode }} release with generated notes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid version: $VERSION"
+            echo "Use a SemVer-like value such as 1.0.0."
+            exit 1
+          fi
+      - name: Create ${{ inputs.release_mode }} release with generated notes
+        uses: release-drafter/release-drafter@v7
+        with:
+          config-name: release-drafter.yml
+          version: ${{ inputs.version }}
+          name: v${{ inputs.version }}
+          tag: v${{ inputs.version }}
+          commitish: ${{ inputs.target_branch }}
+          publish: ${{ inputs.release_mode == 'latest' }}
+          latest: ${{ inputs.release_mode == 'latest' }}
