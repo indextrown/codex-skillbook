@@ -2,7 +2,7 @@
 
 전역 Codex 스킬을 한곳에 모아 관리합니다. 각 스킬 이름을 선택하면 상세 워크플로우를 확인할 수 있습니다.
 
-## 설치 및 업데이트
+## 설치, 업데이트 및 삭제
 
 ```bash
 # 최초 설치: Codex 전역에 모든 스킬 설치
@@ -13,6 +13,9 @@ npx skills update --global
 
 # 특정 스킬만 업데이트
 npx skills update --global global-humanize-korean
+
+# 특정 스킬 삭제
+npx skills remove global-humanize-korean --agent codex --global --yes
 ```
 
 ## 자주 사용하는 스킬
