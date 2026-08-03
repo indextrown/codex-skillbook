@@ -7,8 +7,7 @@ description: technical-writing.dev의 overview, 튜토리얼, AI와 함께 쓰�
 
 ## 목적
 
-이 스킬은 기존 `technical-writing` 스킬을 바탕으로 확장한 범용 기술 문서 스킬이다.
-`technical-writing.dev`의 `시작하기`, `튜토리얼`, `AI와 함께 쓰기`, `Step 1~3` 전체 목차를 기준으로 문서 작업을 수행한다.
+`technical-writing.dev`의 `시작하기`, `튜토리얼`, `AI와 함께 쓰기`, `Step 1~3` 전체 목차를 기준으로 문서 작업을 수행하는 범용 기술 문서 스킬이다.
 
 다음 6가지를 하나의 흐름으로 처리한다.
 
