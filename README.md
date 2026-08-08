@@ -65,6 +65,9 @@ $global-planning-pipeline
 # 최초 설치: Codex 전역에 모든 스킬 설치
 npx skills add indextrown/codex-skillbook --skill '*' --agent codex --global --yes
 
+# Codex 전역에 설치된 스킬 목록
+npx skills list --global --agent codex
+
 # 이후 전체 업데이트
 npx skills update --global
 
