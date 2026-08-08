@@ -1,4 +1,4 @@
 interface:
   display_name: "App Store 릴리즈 문구"
-  short_description: "PR 이력으로 App Store 출시 문구를 작성합니다"
-  default_prompt: "Use $global-app-store-release to prepare App Store release notes from the selected PR range."
+  short_description: "App Store 문구를 작성하고 선택적으로 메타데이터를 반영합니다"
+  default_prompt: "Use $global-app-store-release to prepare App Store release notes and ask before delivering metadata."
