@@ -23,7 +23,7 @@ automation. The script never writes a token to disk or to Git.
 
 Options:
   --repo OWNER/REPO        Use this repository instead of detecting origin.
-  --mode auto|chatops      Create branches on assignment (auto) or /cib comments.
+  --mode auto|chatops      Use auto by default; choose chatops for /cib comments.
   --replace-labels         Remove existing labels that are not in labels.json.
   --dry-run                Preview file and label changes without writing them.
   --yes                    Accept prompts. Use only after reviewing the defaults.
@@ -66,7 +66,7 @@ select_mode() {
 
   printf '\n브랜치 생성 방식:\n'
   printf '  1) auto    — 이슈 담당자 지정 시 자동 생성 (기본값)\n'
-  printf '  2) chatops — 이슈 댓글의 /cib 명령으로 생성\n'
+  printf '  2) chatops — 필요할 때만: 이슈 댓글의 /cib 명령으로 생성\n'
   read -r -p '선택 [1/2, 기본값 1]: ' answer
 
   case "$answer" in
