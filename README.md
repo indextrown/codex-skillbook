@@ -82,12 +82,12 @@ npx skills remove global-humanize-korean --agent codex --global --yes
 
 | 한글 제목 | 스킬 | 설명 |
 | --- | --- | --- |
-| 이슈·브랜치·PR 파이프라인 | [global-branch-planning-pipeline](./skills/global-branch-planning-pipeline/SKILL.md) | 이슈 생성부터 브랜치, 구현, 커밋, PR까지의 작업 흐름을 일관되게 관리합니다. |
-| App Store 릴리즈 문구 | [global-app-store-release](./skills/global-app-store-release/SKILL.md) | PR·커밋 이력에서 사용자 변경을 골라 다국어 App Store 릴리즈 노트와 심사 메모를 작성합니다. |
-| GitHub 저장소 초기 설정 | [global-github-repository-setup](./skills/global-github-repository-setup/SKILL.md) | 표준 레이블과 이슈 브랜치 자동화를 안전하게 설정하고, 기존 레이블을 보존합니다. |
-| 한국어 문체 다듬기 | [global-humanize-korean](./skills/global-humanize-korean/SKILL.md) | 의미와 사실은 유지하면서 AI 번역투와 기계적인 문장을 자연스러운 한국어로 다듬습니다. |
-| 구현 계획 수립 | [global-planning-pipeline](./skills/global-planning-pipeline/SKILL.md) | 구현 전에 작업 계획, 방향성, 리팩터링 접근 방법을 검토하고 정리합니다. |
-| 기술 문서 작성 | [global-technical-writing](./skills/global-technical-writing/SKILL.md) | 기술 문서를 구조화하고, 명확하고 자연스러운 한국어 문체로 작성하거나 다듬습니다. |
+| 이슈·브랜치·PR 파이프라인 | [global-branch-planning-pipeline](./skills/global-branch-planning-pipeline/SKILL.md) | 이슈 생성부터 브랜치, 구현, 커밋, PR까지의 작업 흐름을 일관되게 관리합니다.<br><br>**사용 예시**<br>`$global-branch-planning-pipeline 인증 흐름을 개선하는 작업을 이슈부터 PR까지 진행해줘.` |
+| App Store 릴리즈 문구 | [global-app-store-release](./skills/global-app-store-release/SKILL.md) | PR·커밋 이력에서 사용자 변경을 골라 다국어 App Store 릴리즈 노트와 심사 메모를 작성합니다.<br><br>**사용 예시**<br>`$global-app-store-release 이번 버전의 App Store 릴리즈 노트를 준비해줘.` |
+| GitHub 저장소 초기 설정 | [global-github-repository-setup](./skills/global-github-repository-setup/SKILL.md) | 표준 레이블과 이슈 브랜치 자동화를 안전하게 설정하고, 기존 레이블을 보존합니다.<br><br>**사용 예시**<br>`$global-github-repository-setup 이 저장소에 표준 GitHub 초기 설정을 적용해줘.` |
+| 한국어 문체 다듬기 | [global-humanize-korean](./skills/global-humanize-korean/SKILL.md) | 의미와 사실은 유지하면서 AI 번역투와 기계적인 문장을 자연스러운 한국어로 다듬습니다.<br><br>**사용 예시**<br>`$global-humanize-korean README의 한국어 문장을 자연스럽게 다듬어줘.` |
+| 구현 계획 수립 | [global-planning-pipeline](./skills/global-planning-pipeline/SKILL.md) | 구현 전에 작업 계획, 방향성, 리팩터링 접근 방법을 검토하고 정리합니다.<br><br>**사용 예시**<br>`$global-planning-pipeline 로그인 후 앱이 멈추는 문제의 원인을 점검하고 수정 계획을 세워줘.` |
+| 기술 문서 작성 | [global-technical-writing](./skills/global-technical-writing/SKILL.md) | 기술 문서를 구조화하고, 명확하고 자연스러운 한국어 문체로 작성하거나 다듬습니다.<br><br>**사용 예시**<br>`$global-technical-writing API 인증 가이드를 사용자가 바로 따라 할 수 있게 작성해줘.` |
 
 ## 레거시 스킬
 
