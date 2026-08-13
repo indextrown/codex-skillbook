@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub 저장소 초기 설정"
+  short_description: "레이블과 이슈 브랜치 자동화를 안전하게 설정합니다"
+  default_prompt: "Use $global-github-repository-setup to configure labels and issue-branch automation for this repository."
