@@ -34,7 +34,9 @@ description: 새 GitHub 저장소의 표준 레이블, 이슈 기반 브랜치 �
 bash ~/.agents/skills/global-github-repository-setup/scripts/setup-github-repository.sh
 ```
 
-기본값은 이슈 담당자 지정 시 브랜치를 만드는 `auto` 모드다. 이슈 댓글의 `/cib` 명령으로 만들려면 `chatops` 모드를 사용한다.
+기본값은 이슈 담당자 지정 시 브랜치를 만드는 `auto` 모드다. 대부분의 저장소는 이 모드만 사용한다.
+
+`chatops` 모드는 이슈 댓글의 `/cib` 명령으로 브랜치를 만들고 싶을 때만 선택한다. 지금은 기본으로 사용하지 않지만, 추후 댓글 기반 흐름이 필요할 수 있어 템플릿과 선택지를 유지한다. `chatops`를 선택하지 않으면 관련 파일은 대상 저장소에 복사되지 않는다.
 
 ```bash
 bash ~/.agents/skills/global-github-repository-setup/scripts/setup-github-repository.sh \
