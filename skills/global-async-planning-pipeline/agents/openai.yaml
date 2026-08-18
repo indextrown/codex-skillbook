@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Async Planning Pipeline"
+  short_description: "서브 에이전트 기반 3단계 계획"
+  default_prompt: "Use $global-async-planning-pipeline to create a plan with sequential Researcher, Planner, and Reviewer subagents."
