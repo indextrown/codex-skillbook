@@ -20,7 +20,9 @@ SPEC_KIND = "tech-spec"
 DEFAULT_SPEC_DIRECTORY = Path("docs/tech-specs")
 SOURCE_FILE_NAME = "tech-spec.md"
 OUTPUT_FILE_NAME = "tech-spec.html"
-FEATURE_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+FEATURE_DIRECTORY_PATTERN = re.compile(
+    r"(?P<sequence>[0-9]{3})-(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)"
+)
 CONTROL_FIELDS = {"kind", "title", "html"}
 META_LABELS = {
     "status": "상태",
@@ -484,21 +486,27 @@ def is_within(path: Path, root: Path) -> bool:
         return False
 
 
-def validate_source_location(root: Path, source: Path) -> None:
+def validate_source_location(root: Path, source: Path) -> int:
     relative = source.relative_to(root)
     parts = relative.parts
     prefix = DEFAULT_SPEC_DIRECTORY.parts
+    directory_match = (
+        FEATURE_DIRECTORY_PATTERN.fullmatch(parts[-2]) if len(parts) >= 2 else None
+    )
     if (
         len(parts) != len(prefix) + 2
         or parts[: len(prefix)] != prefix
         or parts[-1] != SOURCE_FILE_NAME
-        or not FEATURE_SLUG_PATTERN.fullmatch(parts[-2])
+        or directory_match is None
+        or directory_match.group("sequence") == "000"
     ):
         raise SpecError(
             "테크 스펙 Markdown은 "
-            f"{DEFAULT_SPEC_DIRECTORY}/<feature-slug>/{SOURCE_FILE_NAME}에 저장해야 해요: "
+            f"{DEFAULT_SPEC_DIRECTORY}/<sequence>-<feature-slug>/{SOURCE_FILE_NAME}에 "
+            "저장해야 해요. sequence는 001부터 시작하는 세 자리 번호예요: "
             f"{relative}"
         )
+    return int(directory_match.group("sequence"))
 
 
 def output_path(root: Path, source: Path, metadata: dict[str, Any]) -> Path:
@@ -565,6 +573,7 @@ def synchronize(
 ) -> tuple[list[Path], list[Path]]:
     updated: list[Path] = []
     stale: list[Path] = []
+    sequence_directories: dict[int, Path] = {}
 
     for source in discover_sources(root, requested):
         markdown = source.read_text(encoding="utf-8")
@@ -578,7 +587,14 @@ def synchronize(
             if requested:
                 raise SpecError(f"kind는 {SPEC_KIND!r}이어야 해요: {source}")
             continue
-        validate_source_location(root, source)
+        sequence = validate_source_location(root, source)
+        previous_directory = sequence_directories.get(sequence)
+        if previous_directory is not None and previous_directory != source.parent:
+            raise SpecError(
+                f"테크 스펙 폴더 번호 {sequence:03d}이 중복됐어요: "
+                f"{previous_directory.relative_to(root)}, {source.parent.relative_to(root)}"
+            )
+        sequence_directories[sequence] = source.parent
         destination = output_path(root, source, metadata)
         expected = render_document(source, markdown)
         current = (

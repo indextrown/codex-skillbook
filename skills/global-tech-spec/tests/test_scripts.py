@@ -28,7 +28,7 @@ class SyncTechSpecsTests(unittest.TestCase):
                 root
                 / "docs"
                 / "tech-specs"
-                / "project-email-notifications"
+                / "001-project-email-notifications"
                 / "tech-spec.md"
             )
             source.parent.mkdir(parents=True)
@@ -89,7 +89,7 @@ html: "./tech-spec.html"
             )
 
             rendered = self.run_sync(
-                root, "docs/tech-specs/project-email-notifications/tech-spec.md"
+                root, "docs/tech-specs/001-project-email-notifications/tech-spec.md"
             )
             self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
             destination = source.with_suffix(".html")
@@ -105,7 +105,7 @@ html: "./tech-spec.html"
             checked = self.run_sync(
                 root,
                 "--check",
-                "docs/tech-specs/project-email-notifications/tech-spec.md",
+                "docs/tech-specs/001-project-email-notifications/tech-spec.md",
             )
             self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
 
@@ -116,24 +116,30 @@ html: "./tech-spec.html"
             stale = self.run_sync(
                 root,
                 "--check",
-                "docs/tech-specs/project-email-notifications/tech-spec.md",
+                "docs/tech-specs/001-project-email-notifications/tech-spec.md",
             )
             self.assertEqual(stale.returncode, 1)
             self.assertIn(
-                "STALE docs/tech-specs/project-email-notifications/tech-spec.html",
+                "STALE docs/tech-specs/001-project-email-notifications/tech-spec.html",
                 stale.stdout,
             )
 
-    def test_rejects_a_tech_spec_outside_a_feature_folder(self) -> None:
+    def test_rejects_a_tech_spec_without_a_sequence_number(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "docs" / "tech-specs" / "loose.md"
+            source = (
+                root
+                / "docs"
+                / "tech-specs"
+                / "project-email-notifications"
+                / "tech-spec.md"
+            )
             source.parent.mkdir(parents=True)
             source.write_text(
                 """---
 kind: tech-spec
 title: "잘못된 경로"
-html: "./loose.html"
+html: "./tech-spec.html"
 ---
 
 # 잘못된 경로
@@ -141,9 +147,38 @@ html: "./loose.html"
                 encoding="utf-8",
             )
 
-            result = self.run_sync(root, "docs/tech-specs/loose.md")
+            result = self.run_sync(
+                root, "docs/tech-specs/project-email-notifications/tech-spec.md"
+            )
             self.assertEqual(result.returncode, 2)
-            self.assertIn("docs/tech-specs/<feature-slug>/tech-spec.md", result.stdout)
+            self.assertIn(
+                "docs/tech-specs/<sequence>-<feature-slug>/tech-spec.md",
+                result.stdout,
+            )
+
+    def test_rejects_duplicate_sequence_numbers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for feature_directory in ("001-first-feature", "001-second-feature"):
+                source = (
+                    root / "docs" / "tech-specs" / feature_directory / "tech-spec.md"
+                )
+                source.parent.mkdir(parents=True)
+                source.write_text(
+                    f"""---
+kind: tech-spec
+title: "{feature_directory}"
+html: "./tech-spec.html"
+---
+
+# {feature_directory}
+""",
+                    encoding="utf-8",
+                )
+
+            result = self.run_sync(root, "--check")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("테크 스펙 폴더 번호 001이 중복됐어요", result.stdout)
 
     def test_hook_mode_returns_json_and_skips_unmarked_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

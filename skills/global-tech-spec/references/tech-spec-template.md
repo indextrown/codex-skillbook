@@ -5,12 +5,14 @@
 기능마다 아래 폴더를 만들고 두 파일을 함께 저장해요.
 
 ```text
-docs/tech-specs/<feature-slug>/
+docs/tech-specs/<sequence>-<feature-slug>/
 ├── tech-spec.md
 └── tech-spec.html
 ```
 
-`<feature-slug>`는 기능을 설명하는 짧은 영문 kebab-case 이름으로 정해요. 예를 들어 프로젝트별 이메일 알림 설정에는 `project-email-notifications`를 사용해요.
+`<sequence>`는 `001`부터 시작하는 세 자리 번호예요. 기존 폴더에서 가장 큰 번호에 1을 더해요. 기존 번호는 다시 정렬하지 않아요.
+
+`<feature-slug>`는 기능을 설명하는 짧은 영문 kebab-case 이름으로 정해요. 첫 번째 프로젝트별 이메일 알림 설정에는 `001-project-email-notifications`를 사용해요.
 
 ## 기본 형식
 
