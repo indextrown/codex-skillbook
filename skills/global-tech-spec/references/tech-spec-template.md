@@ -1,5 +1,17 @@
 # 테크 스펙 템플릿
 
+## 저장 경로
+
+기능마다 아래 폴더를 만들고 두 파일을 함께 저장해요.
+
+```text
+docs/tech-specs/<feature-slug>/
+├── tech-spec.md
+└── tech-spec.html
+```
+
+`<feature-slug>`는 기능을 설명하는 짧은 영문 kebab-case 이름으로 정해요. 예를 들어 프로젝트별 이메일 알림 설정에는 `project-email-notifications`를 사용해요.
+
 ## 기본 형식
 
 아래 구조를 복사한 뒤 빈 자리 표시자와 안내 문구를 실제 내용으로 바꿔요. 해당 정보가 없으면 값을 지어내지 말고 빈 문자열이나 빈 배열을 유지해요.
@@ -13,7 +25,7 @@ owner: ""
 reviewers: []
 last_updated: "YYYY-MM-DD"
 related_issue: ""
-html: "./<slug>.html"
+html: "./tech-spec.html"
 ---
 
 # <기능 이름>

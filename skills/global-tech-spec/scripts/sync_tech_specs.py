@@ -18,6 +18,9 @@ from urllib.parse import urlsplit
 
 SPEC_KIND = "tech-spec"
 DEFAULT_SPEC_DIRECTORY = Path("docs/tech-specs")
+SOURCE_FILE_NAME = "tech-spec.md"
+OUTPUT_FILE_NAME = "tech-spec.html"
+FEATURE_SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 CONTROL_FIELDS = {"kind", "title", "html"}
 META_LABELS = {
     "status": "상태",
@@ -481,17 +484,37 @@ def is_within(path: Path, root: Path) -> bool:
         return False
 
 
+def validate_source_location(root: Path, source: Path) -> None:
+    relative = source.relative_to(root)
+    parts = relative.parts
+    prefix = DEFAULT_SPEC_DIRECTORY.parts
+    if (
+        len(parts) != len(prefix) + 2
+        or parts[: len(prefix)] != prefix
+        or parts[-1] != SOURCE_FILE_NAME
+        or not FEATURE_SLUG_PATTERN.fullmatch(parts[-2])
+    ):
+        raise SpecError(
+            "테크 스펙 Markdown은 "
+            f"{DEFAULT_SPEC_DIRECTORY}/<feature-slug>/{SOURCE_FILE_NAME}에 저장해야 해요: "
+            f"{relative}"
+        )
+
+
 def output_path(root: Path, source: Path, metadata: dict[str, Any]) -> Path:
+    expected = (source.parent / OUTPUT_FILE_NAME).resolve()
     configured = display_value(metadata.get("html", "")).strip()
-    candidate = (
-        source.with_suffix(".html") if not configured else source.parent / configured
+    configured_path = (
+        expected if not configured else (source.parent / configured).resolve()
     )
-    resolved = candidate.resolve()
-    if resolved.suffix.lower() != ".html":
-        raise SpecError(f"HTML 출력 경로는 .html로 끝나야 해요: {candidate}")
-    if not is_within(resolved, root):
-        raise SpecError(f"HTML 출력 경로가 저장소 밖을 가리켜요: {candidate}")
-    return resolved
+    if configured_path != expected:
+        raise SpecError(
+            f"HTML은 Markdown과 같은 폴더의 {OUTPUT_FILE_NAME}에 저장해야 해요: "
+            f"{configured_path}"
+        )
+    if not is_within(expected, root):
+        raise SpecError(f"HTML 출력 경로가 저장소 밖을 가리켜요: {expected}")
+    return expected
 
 
 def discover_sources(root: Path, requested: list[str]) -> list[Path]:
@@ -555,6 +578,7 @@ def synchronize(
             if requested:
                 raise SpecError(f"kind는 {SPEC_KIND!r}이어야 해요: {source}")
             continue
+        validate_source_location(root, source)
         destination = output_path(root, source, metadata)
         expected = render_document(source, markdown)
         current = (

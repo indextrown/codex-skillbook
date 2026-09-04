@@ -24,7 +24,13 @@ class SyncTechSpecsTests(unittest.TestCase):
     def test_renders_and_checks_a_tech_spec(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "docs" / "tech-specs" / "email-notifications.md"
+            source = (
+                root
+                / "docs"
+                / "tech-specs"
+                / "project-email-notifications"
+                / "tech-spec.md"
+            )
             source.parent.mkdir(parents=True)
             source.write_text(
                 """---
@@ -35,7 +41,7 @@ owner: "플랫폼 팀"
 reviewers: ["백엔드", "프론트엔드"]
 last_updated: "2026-09-05"
 related_issue: "https://example.com/issues/32"
-html: "./email-notifications.html"
+html: "./tech-spec.html"
 ---
 
 # 프로젝트별 이메일 알림 설정
@@ -82,7 +88,9 @@ html: "./email-notifications.html"
                 encoding="utf-8",
             )
 
-            rendered = self.run_sync(root, "docs/tech-specs/email-notifications.md")
+            rendered = self.run_sync(
+                root, "docs/tech-specs/project-email-notifications/tech-spec.md"
+            )
             self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
             destination = source.with_suffix(".html")
             output = destination.read_text(encoding="utf-8")
@@ -95,7 +103,9 @@ html: "./email-notifications.html"
             )
 
             checked = self.run_sync(
-                root, "--check", "docs/tech-specs/email-notifications.md"
+                root,
+                "--check",
+                "docs/tech-specs/project-email-notifications/tech-spec.md",
             )
             self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
 
@@ -104,12 +114,36 @@ html: "./email-notifications.html"
                 encoding="utf-8",
             )
             stale = self.run_sync(
-                root, "--check", "docs/tech-specs/email-notifications.md"
+                root,
+                "--check",
+                "docs/tech-specs/project-email-notifications/tech-spec.md",
             )
             self.assertEqual(stale.returncode, 1)
             self.assertIn(
-                "STALE docs/tech-specs/email-notifications.html", stale.stdout
+                "STALE docs/tech-specs/project-email-notifications/tech-spec.html",
+                stale.stdout,
             )
+
+    def test_rejects_a_tech_spec_outside_a_feature_folder(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs" / "tech-specs" / "loose.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """---
+kind: tech-spec
+title: "잘못된 경로"
+html: "./loose.html"
+---
+
+# 잘못된 경로
+""",
+                encoding="utf-8",
+            )
+
+            result = self.run_sync(root, "docs/tech-specs/loose.md")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("docs/tech-specs/<feature-slug>/tech-spec.md", result.stdout)
 
     def test_hook_mode_returns_json_and_skips_unmarked_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -13,13 +13,16 @@ description: 기능 요구사항과 저장소 문맥을 뱅크샐러드식 7개 
 
 ## 결과물
 
-기본 경로는 아래와 같아요. 저장소에 별도 문서 규칙이 있으면 그 규칙을 우선해요.
+저장소 루트의 `docs/tech-specs` 아래에 기능별 폴더를 만들어요. Markdown과 HTML 파일명은 항상 `tech-spec`으로 맞춰요.
 
 ```text
-docs/tech-specs/<slug>.md
-docs/tech-specs/<slug>.html
+docs/tech-specs/<feature-slug>/
+├── tech-spec.md
+└── tech-spec.html
 ```
 
+- `<feature-slug>`는 기능을 설명하는 짧은 영문 kebab-case 이름으로 정해요. 예를 들어 프로젝트별 이메일 알림 설정은 `project-email-notifications`를 사용해요.
+- `new-feature`, `spec`, `document`처럼 의미가 드러나지 않는 폴더명은 사용하지 않아요.
 - Markdown이 단일 원본이에요.
 - HTML은 Markdown과 같은 사실, 요구사항, 결정, 미결 사항을 담아요.
 - 목차, 색상, 여백처럼 읽기 위한 표현만 HTML에 추가할 수 있어요.
@@ -67,20 +70,25 @@ docs/tech-specs/<slug>.html
 6. 고려 사항
 7. 마일스톤
 
-초안에 남은 빈 자리 표시자와 안내 문구는 최종 파일에서 제거해요. 문서 맨 위에는 `kind: tech-spec`을 포함한 최소 frontmatter를 넣어 HTML 동기화 대상을 식별해요.
+기능 이름에서 `<feature-slug>`를 정하고 `docs/tech-specs/<feature-slug>/tech-spec.md`를 만들어요. 초안에 남은 빈 자리 표시자와 안내 문구는 최종 파일에서 제거해요. 문서 맨 위에는 `kind: tech-spec`을 포함한 최소 frontmatter를 넣어 HTML 동기화 대상을 식별해요.
 
 ### 3. HTML을 생성해요
 
 Markdown을 저장한 뒤 이 스킬의 변환 스크립트를 실행해요.
 
 ```bash
-python3 <skill-directory>/scripts/sync_tech_specs.py --root <repository-root> <markdown-path>
+python3 <skill-directory>/scripts/sync_tech_specs.py \
+  --root <repository-root> \
+  docs/tech-specs/<feature-slug>/tech-spec.md
 ```
 
 HTML에는 Markdown 원본의 해시를 기록해요. 변환 뒤 아래 명령으로 두 파일이 최신 상태인지 확인해요.
 
 ```bash
-python3 <skill-directory>/scripts/sync_tech_specs.py --root <repository-root> --check <markdown-path>
+python3 <skill-directory>/scripts/sync_tech_specs.py \
+  --root <repository-root> \
+  --check \
+  docs/tech-specs/<feature-slug>/tech-spec.md
 ```
 
 ### 4. 프로젝트 훅을 설치해요
