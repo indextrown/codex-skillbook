@@ -58,9 +58,9 @@ body {
 }
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 760px) 220px;
-  gap: 48px;
-  max-width: 1100px;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 40px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 64px 32px 96px;
 }
@@ -91,6 +91,7 @@ code {
   font-family: "SFMono-Regular", Consolas, monospace;
   font-size: 0.9em;
 }
+p code, li code, th code, td code { overflow-wrap: anywhere; }
 pre {
   overflow-x: auto;
   padding: 18px 20px;
@@ -106,7 +107,7 @@ blockquote {
   border-left: 4px solid var(--accent);
 }
 table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
-th, td { padding: 11px 13px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
+th, td { padding: 11px 13px; text-align: left; vertical-align: top; border: 1px solid var(--line); overflow-wrap: anywhere; }
 th { background: var(--code); }
 .metadata {
   display: grid;
@@ -223,7 +224,7 @@ hr { margin: 2em 0; border: 0; border-top: 1px solid var(--line); }
 .milestone-subtasks li { margin: 7px 0 0; }
 .milestone-subtasks .milestone-checkbox { width: 16px; height: 16px; margin-top: 3px; }
 .milestone-subtasks .milestone-checkbox:checked::after { font-size: 11px; line-height: 13px; }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .layout { display: block; padding: 24px 16px 56px; }
   article { padding: 36px 24px; border-radius: 14px; }
   nav { display: none; }
