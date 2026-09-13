@@ -1,5 +1,4 @@
 interface:
   display_name: "Global Tech Spec"
-  short_description: "Markdown과 HTML 테크 스펙 동기화"
-  default_prompt: "Use $global-tech-spec to turn these feature requirements into a concise Markdown tech spec and a synchronized HTML document."
-
+  short_description: "테크 스펙 Markdown·HTML 동기화와 개발자 승인 관리"
+  default_prompt: "Use $global-tech-spec to draft a Markdown tech spec and synchronized HTML for developer review."

@@ -79,7 +79,7 @@ html: "./tech-spec.html"
 
 권한 검사를 확인해요.
 
-## 마일스톤
+## 진행 체크리스트
 
 | 단계 | 완료 조건 |
 | --- | --- |
@@ -124,6 +124,21 @@ html: "./tech-spec.html"
                 stale.stdout,
             )
 
+            source.write_text(
+                source.read_text(encoding="utf-8").replace(
+                    'status: "초안"', 'status: "승인"'
+                ),
+                encoding="utf-8",
+            )
+            approved = self.run_sync(
+                root, "docs/tech-specs/001-project-email-notifications/tech-spec.md"
+            )
+            self.assertEqual(approved.returncode, 0, approved.stdout + approved.stderr)
+            self.assertIn(
+                "<dt>상태</dt><dd>승인</dd>",
+                destination.read_text(encoding="utf-8"),
+            )
+
     def test_rejects_a_tech_spec_without_a_sequence_number(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -155,6 +170,122 @@ html: "./tech-spec.html"
                 "docs/tech-specs/<sequence>-<feature-slug>/tech-spec.md",
                 result.stdout,
             )
+
+    def test_milestone_checklist_tracks_markdown_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs/tech-specs/001-example/tech-spec.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """---
+kind: tech-spec
+title: "체크리스트 예시"
+status: "승인"
+---
+
+# 체크리스트 예시
+
+## 진행 체크리스트
+
+- [x] 1. 스펙 승인
+  - [x] 개발자가 HTML을 검토해요.
+- [ ] 2. 설정 구현
+  - [x] 저장 기능을 구현해요.
+  - [ ] 권한을 검증해요.
+- [ ] 3. 최종 검증
+  - [ ] `<script>` 입력을 막아요.
+""",
+                encoding="utf-8",
+            )
+
+            rendered = self.run_sync(root, str(source))
+            self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+            destination = source.with_suffix(".html")
+            output = destination.read_text(encoding="utf-8")
+            self.assertIn('class="milestone-panel"', output)
+            self.assertIn('<h2 id="진행-체크리스트">진행 체크리스트</h2>', output)
+            self.assertIn('href="#진행-체크리스트">진행 체크리스트</a>', output)
+            self.assertIn('aria-label="진행 체크리스트"', output)
+            self.assertIn("1 / 3 완료", output)
+            self.assertIn('style="width: 33%"', output)
+            self.assertIn('class="milestone-step is-complete"', output)
+            self.assertIn('class="milestone-step is-current"', output)
+            self.assertEqual(output.count('class="milestone-next"'), 1)
+            self.assertIn('type="checkbox" disabled checked', output)
+            self.assertIn('type="checkbox" disabled>', output)
+            self.assertIn("&lt;script&gt;", output)
+            self.assertNotIn("<script>", output)
+            self.assertIn("<dt>상태</dt><dd>승인</dd>", output)
+
+            source.write_text(
+                source.read_text(encoding="utf-8")
+                .replace("- [ ] 2. 설정 구현", "- [x] 2. 설정 구현")
+                .replace("- [ ] 권한을 검증해요.", "- [x] 권한을 검증해요."),
+                encoding="utf-8",
+            )
+            stale = self.run_sync(root, "--check", str(source))
+            self.assertEqual(stale.returncode, 1)
+            updated = self.run_sync(root, str(source))
+            self.assertEqual(updated.returncode, 0)
+            output = destination.read_text(encoding="utf-8")
+            self.assertIn("2 / 3 완료", output)
+            self.assertIn('style="width: 67%"', output)
+            self.assertEqual(output.count('class="milestone-next"'), 1)
+            self.assertIn("<dt>상태</dt><dd>승인</dd>", output)
+            self.assertEqual(self.run_sync(root, "--check", str(source)).returncode, 0)
+
+    def test_renders_existing_milestone_checklists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs/tech-specs/001-example/tech-spec.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """---
+kind: tech-spec
+title: "기존 문서"
+---
+
+# 기존 문서
+
+## 마일스톤
+
+- [ ] 1. 검증
+  - [ ] 동작을 확인해요.
+""",
+                encoding="utf-8",
+            )
+
+            result = self.run_sync(root, str(source))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            output = source.with_suffix(".html").read_text(encoding="utf-8")
+            self.assertIn('<h2 id="마일스톤">마일스톤</h2>', output)
+            self.assertIn('class="milestone-panel"', output)
+
+    def test_rejects_completed_stage_with_unchecked_condition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs/tech-specs/001-example/tech-spec.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """---
+kind: tech-spec
+title: "완료 조건 검증"
+---
+
+# 완료 조건 검증
+
+## 진행 체크리스트
+
+- [x] 1. 구현
+  - [ ] 검증해요.
+""",
+                encoding="utf-8",
+            )
+
+            result = self.run_sync(root, str(source))
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("미완료 하위 항목", result.stdout)
+            self.assertFalse(source.with_suffix(".html").exists())
 
     def test_rejects_duplicate_sequence_numbers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -239,6 +370,10 @@ class InstallProjectHookTests(unittest.TestCase):
             config = json.loads(first_config_text)
             self.assertIn("SessionStart", config["hooks"])
             self.assertEqual(len(config["hooks"]["PostToolUse"]), 1)
+            self.assertEqual(
+                config["hooks"]["PostToolUse"][0]["matcher"],
+                "Bash|apply_patch|Edit|Write",
+            )
             self.assertEqual(len(config["hooks"]["Stop"]), 1)
             self.assertTrue(
                 (root / ".codex" / "hooks" / "sync_tech_specs.py").is_file()
@@ -263,6 +398,29 @@ class InstallProjectHookTests(unittest.TestCase):
                 hook_result.returncode, 0, hook_result.stdout + hook_result.stderr
             )
             self.assertEqual(json.loads(hook_result.stdout), {})
+
+    def test_upgrades_legacy_post_tool_matcher_without_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = self.run_installer(root)
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+
+            config_path = root / ".codex" / "hooks.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["hooks"]["PostToolUse"][0]["matcher"] = "apply_patch|Edit|Write"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            upgraded = self.run_installer(root)
+            self.assertEqual(upgraded.returncode, 0, upgraded.stdout + upgraded.stderr)
+            upgraded_config = json.loads(config_path.read_text(encoding="utf-8"))
+            groups = upgraded_config["hooks"]["PostToolUse"]
+            self.assertEqual(len(groups), 1)
+            self.assertEqual(groups[0]["matcher"], "Bash|apply_patch|Edit|Write")
+
+            updated_text = config_path.read_text(encoding="utf-8")
+            repeated = self.run_installer(root)
+            self.assertEqual(repeated.returncode, 0, repeated.stdout + repeated.stderr)
+            self.assertEqual(config_path.read_text(encoding="utf-8"), updated_text)
 
     def test_does_not_overwrite_invalid_hook_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
