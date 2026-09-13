@@ -171,6 +171,92 @@ html: "./tech-spec.html"
                 result.stdout,
             )
 
+    def test_milestone_checklist_tracks_markdown_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs/tech-specs/001-example/tech-spec.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """---
+kind: tech-spec
+title: "체크리스트 예시"
+status: "승인"
+---
+
+# 체크리스트 예시
+
+## 마일스톤
+
+- [x] 1. 스펙 승인
+  - [x] 개발자가 HTML을 검토해요.
+- [ ] 2. 설정 구현
+  - [x] 저장 기능을 구현해요.
+  - [ ] 권한을 검증해요.
+- [ ] 3. 최종 검증
+  - [ ] `<script>` 입력을 막아요.
+""",
+                encoding="utf-8",
+            )
+
+            rendered = self.run_sync(root, str(source))
+            self.assertEqual(rendered.returncode, 0, rendered.stdout + rendered.stderr)
+            destination = source.with_suffix(".html")
+            output = destination.read_text(encoding="utf-8")
+            self.assertIn('class="milestone-panel"', output)
+            self.assertIn("1 / 3 완료", output)
+            self.assertIn('style="width: 33%"', output)
+            self.assertIn('class="milestone-step is-complete"', output)
+            self.assertIn('class="milestone-step is-current"', output)
+            self.assertEqual(output.count('class="milestone-next"'), 1)
+            self.assertIn('type="checkbox" disabled checked', output)
+            self.assertIn('type="checkbox" disabled>', output)
+            self.assertIn("&lt;script&gt;", output)
+            self.assertNotIn("<script>", output)
+            self.assertIn("<dt>상태</dt><dd>승인</dd>", output)
+
+            source.write_text(
+                source.read_text(encoding="utf-8")
+                .replace("- [ ] 2. 설정 구현", "- [x] 2. 설정 구현")
+                .replace("- [ ] 권한을 검증해요.", "- [x] 권한을 검증해요."),
+                encoding="utf-8",
+            )
+            stale = self.run_sync(root, "--check", str(source))
+            self.assertEqual(stale.returncode, 1)
+            updated = self.run_sync(root, str(source))
+            self.assertEqual(updated.returncode, 0)
+            output = destination.read_text(encoding="utf-8")
+            self.assertIn("2 / 3 완료", output)
+            self.assertIn('style="width: 67%"', output)
+            self.assertEqual(output.count('class="milestone-next"'), 1)
+            self.assertIn("<dt>상태</dt><dd>승인</dd>", output)
+            self.assertEqual(self.run_sync(root, "--check", str(source)).returncode, 0)
+
+    def test_rejects_completed_stage_with_unchecked_condition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs/tech-specs/001-example/tech-spec.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """---
+kind: tech-spec
+title: "완료 조건 검증"
+---
+
+# 완료 조건 검증
+
+## 마일스톤
+
+- [x] 1. 구현
+  - [ ] 검증해요.
+""",
+                encoding="utf-8",
+            )
+
+            result = self.run_sync(root, str(source))
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("미완료 하위 항목", result.stdout)
+            self.assertFalse(source.with_suffix(".html").exists())
+
     def test_rejects_duplicate_sequence_numbers(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -23,6 +23,9 @@ OUTPUT_FILE_NAME = "tech-spec.html"
 FEATURE_DIRECTORY_PATTERN = re.compile(
     r"(?P<sequence>[0-9]{3})-(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)"
 )
+TASK_PATTERN = re.compile(
+    r"^(?P<indent> *)[-+*]\s+\[(?P<checked>[ xX])\]\s+(?P<label>.+?)\s*$"
+)
 CONTROL_FIELDS = {"kind", "title", "html"}
 META_LABELS = {
     "status": "상태",
@@ -124,6 +127,102 @@ nav li + li { margin-top: 8px; }
 nav a { color: var(--muted); text-decoration: none; }
 nav a:hover { color: var(--accent); }
 hr { margin: 2em 0; border: 0; border-top: 1px solid var(--line); }
+.milestone-panel {
+  margin: 1.2em 0 0;
+  padding: 24px;
+  background: #f8faff;
+  border: 1px solid #dce5fb;
+  border-radius: 16px;
+}
+.milestone-progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+  font-size: 0.88rem;
+}
+.milestone-progress-copy strong { color: #26334c; }
+.milestone-progress-copy span { color: var(--muted); font-weight: 700; }
+.milestone-progress-track {
+  height: 7px;
+  overflow: hidden;
+  background: #e4e9f3;
+  border-radius: 999px;
+}
+.milestone-progress-track span {
+  display: block;
+  height: 100%;
+  background: #26835b;
+  border-radius: inherit;
+}
+.milestone-steps { margin: 20px 0 0; padding: 0; list-style: none; }
+.milestone-step {
+  margin: 10px 0 0;
+  padding: 17px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.milestone-step.is-current {
+  border-color: #e7bb79;
+  box-shadow: inset 3px 0 #d88827;
+}
+.milestone-step.is-complete { border-color: #c9e2d4; }
+.milestone-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  line-height: 1.5;
+  cursor: default;
+}
+.milestone-title { font-weight: 700; }
+.milestone-next {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 8px;
+  color: #9a5b13;
+  background: #fff3df;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.milestone-checkbox {
+  appearance: none;
+  flex: none;
+  width: 19px;
+  height: 19px;
+  margin: 3px 0 0;
+  background: #fff;
+  border: 1.5px solid #98a5bb;
+  border-radius: 5px;
+  opacity: 1;
+}
+.milestone-checkbox:checked {
+  background: #26835b;
+  border-color: #26835b;
+}
+.milestone-checkbox:checked::after {
+  content: "✓";
+  display: block;
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+}
+.milestone-subtasks {
+  margin: 12px 0 0 9px;
+  padding: 2px 0 0 19px;
+  border-left: 1px solid var(--line);
+  list-style: none;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.milestone-subtasks li { margin: 7px 0 0; }
+.milestone-subtasks .milestone-checkbox { width: 16px; height: 16px; margin-top: 3px; }
+.milestone-subtasks .milestone-checkbox:checked::after { font-size: 11px; line-height: 13px; }
 @media (max-width: 900px) {
   .layout { display: block; padding: 24px 16px 56px; }
   article { padding: 36px 24px; border-radius: 14px; }
@@ -133,6 +232,8 @@ hr { margin: 2em 0; border: 0; border-top: 1px solid var(--line); }
   body { font-size: 16px; }
   h1 { font-size: 1.85rem; }
   .metadata { grid-template-columns: 1fr; }
+  .milestone-panel { padding: 16px; }
+  .milestone-step { padding: 14px; }
 }
 """.strip()
 
@@ -252,6 +353,99 @@ def is_table_separator(line: str) -> bool:
     return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells)
 
 
+def render_milestone_checklist(lines: list[str], start: int) -> tuple[str, int]:
+    stages: list[dict[str, Any]] = []
+    index = start
+    while index < len(lines):
+        match = TASK_PATTERN.match(lines[index])
+        if match is None:
+            if not lines[index].strip():
+                next_index = index + 1
+                while next_index < len(lines) and not lines[next_index].strip():
+                    next_index += 1
+                if next_index < len(lines) and TASK_PATTERN.match(lines[next_index]):
+                    index = next_index
+                    continue
+            break
+
+        task = {
+            "checked": match.group("checked").lower() == "x",
+            "label": match.group("label"),
+            "children": [],
+        }
+        if match.group("indent"):
+            if not stages:
+                raise SpecError("마일스톤 하위 항목보다 상위 단계가 먼저 와야 해요.")
+            stages[-1]["children"].append(task)
+        else:
+            stages.append(task)
+        index += 1
+
+    for stage in stages:
+        if stage["checked"] and any(
+            not child["checked"] for child in stage["children"]
+        ):
+            raise SpecError(
+                f"완료한 마일스톤에는 미완료 하위 항목이 남을 수 없어요: {stage['label']}"
+            )
+
+    completed = sum(stage["checked"] for stage in stages)
+    total = len(stages)
+    progress = round(completed * 100 / total) if total else 0
+    cards: list[str] = []
+    current_highlighted = False
+    for stage in stages:
+        classes = ["milestone-step"]
+        next_label = ""
+        if stage["checked"]:
+            classes.append("is-complete")
+        elif not current_highlighted:
+            classes.append("is-current")
+            next_label = '<span class="milestone-next">다음 단계</span>'
+            current_highlighted = True
+
+        checkbox = '<input class="milestone-checkbox" type="checkbox" disabled'
+        if stage["checked"]:
+            checkbox += " checked"
+        checkbox += ">"
+        title = (
+            f'<label class="milestone-task">{checkbox}'
+            f'<span class="milestone-title">{render_inline(stage["label"])}</span>'
+            f"{next_label}</label>"
+        )
+        children: list[str] = []
+        for child in stage["children"]:
+            child_checkbox = '<input class="milestone-checkbox" type="checkbox" disabled'
+            if child["checked"]:
+                child_checkbox += " checked"
+            child_checkbox += ">"
+            children.append(
+                '<li><label class="milestone-task">'
+                + child_checkbox
+                + f'<span>{render_inline(child["label"])}</span></label></li>'
+            )
+        subtasks = (
+            '<ul class="milestone-subtasks">' + "".join(children) + "</ul>"
+            if children
+            else ""
+        )
+        cards.append(
+            f'<li class="{" ".join(classes)}">{title}{subtasks}</li>'
+        )
+
+    panel = (
+        '<section class="milestone-panel" aria-label="마일스톤 진행 상황">'
+        '<div class="milestone-progress-copy"><strong>진행 단계</strong>'
+        f'<span>{completed} / {total} 완료</span></div>'
+        '<div class="milestone-progress-track" aria-hidden="true">'
+        f'<span style="width: {progress}%"></span></div>'
+        '<ul class="milestone-steps">'
+        + "".join(cards)
+        + "</ul></section>"
+    )
+    return panel, index
+
+
 def render_markdown(body: str) -> tuple[str, list[tuple[int, str, str]]]:
     lines = body.splitlines()
     rendered: list[str] = []
@@ -260,6 +454,7 @@ def render_markdown(body: str) -> tuple[str, list[tuple[int, str, str]]]:
     paragraph: list[str] = []
     list_type: str | None = None
     list_items: list[str] = []
+    current_section = ""
 
     def flush_paragraph() -> None:
         if paragraph:
@@ -311,6 +506,8 @@ def render_markdown(body: str) -> tuple[str, list[tuple[int, str, str]]]:
             flush_list()
             level = len(heading_match.group(1))
             label = heading_match.group(2).rstrip("#").strip()
+            if level == 2:
+                current_section = label
             heading_id = slugify(label, used_ids)
             rendered.append(
                 f'<h{level} id="{html.escape(heading_id, quote=True)}">{render_inline(label)}</h{level}>'
@@ -349,6 +546,13 @@ def render_markdown(body: str) -> tuple[str, list[tuple[int, str, str]]]:
                 + "".join(row_html)
                 + "</tbody></table>"
             )
+            continue
+
+        if current_section == "마일스톤" and TASK_PATTERN.match(line):
+            flush_paragraph()
+            flush_list()
+            checklist_html, index = render_milestone_checklist(lines, index)
+            rendered.append(checklist_html)
             continue
 
         unordered_match = re.match(r"^\s*[-+*]\s+(.+)$", line)
