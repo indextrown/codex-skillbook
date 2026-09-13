@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Grilling"
+  short_description: "아이디어와 설계의 미결정 사항을 질문으로 검증"
+  default_prompt: "Use $global-grilling to question this idea until its important decisions and remaining uncertainties are clear."

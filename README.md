@@ -88,6 +88,7 @@ npx skills remove global-humanize-korean --agent codex --global --yes
 | 한국어 문체 다듬기 | [global-humanize-korean](./skills/global-humanize-korean/SKILL.md) | 의미와 사실은 유지하면서 AI 번역투와 기계적인 문장을 자연스러운 한국어로 다듬습니다.<br><br>**사용 예시**<br>`$global-humanize-korean README의 한국어 문장을 자연스럽게 다듬어줘.` |
 | 구현 계획 수립 | [global-planning-pipeline](./skills/global-planning-pipeline/SKILL.md) | 구현 전에 작업 계획, 방향성, 리팩터링 접근 방법을 검토하고 정리합니다.<br><br>**사용 예시**<br>`$global-planning-pipeline 로그인 후 앱이 멈추는 문제의 원인을 점검하고 수정 계획을 세워줘.` |
 | 역할 분리 계획 수립 | [global-async-planning-pipeline](./skills/global-async-planning-pipeline/SKILL.md) | Researcher, Planner, Reviewer 서브 에이전트가 순서대로 근거·계획·검토 결과를 인계합니다.<br><br>**사용 예시**<br>`$global-async-planning-pipeline 로그인 후 앱이 멈추는 문제를 역할별 서브 에이전트로 점검하고 수정 계획을 세워줘.` |
+| 아이디어 그릴링 | [global-grilling](./skills/global-grilling/SKILL.md) | 계획이나 구현 전에 중요한 미결정 사항을 질문으로 확인하고, 사용자가 내린 결정을 정리합니다.<br><br>**사용 예시**<br>`$global-grilling 프로젝트별 이메일 알림 기능 아이디어를 질문으로 검토해줘.` |
 | 테크 스펙 작성 | [global-tech-spec](./skills/global-tech-spec/SKILL.md) | 기능 요구사항을 간결한 테크 스펙으로 정리하고 `docs/tech-specs/001-<feature-slug>/` 형식의 폴더에 Markdown·HTML과 동기화 훅을 함께 준비합니다.<br><br>**사용 예시**<br>`$global-tech-spec 프로젝트별 이메일 알림 설정 기능의 테크 스펙을 만들어줘.` |
 | 기술 문서 작성 | [global-technical-writing](./skills/global-technical-writing/SKILL.md) | 기술 문서를 구조화하고, 명확하고 자연스러운 한국어 문체로 작성하거나 다듬습니다.<br><br>**사용 예시**<br>`$global-technical-writing API 인증 가이드를 사용자가 바로 따라 할 수 있게 작성해줘.` |
 
