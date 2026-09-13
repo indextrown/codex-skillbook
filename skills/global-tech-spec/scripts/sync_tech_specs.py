@@ -375,7 +375,7 @@ def render_milestone_checklist(lines: list[str], start: int) -> tuple[str, int]:
         }
         if match.group("indent"):
             if not stages:
-                raise SpecError("마일스톤 하위 항목보다 상위 단계가 먼저 와야 해요.")
+                raise SpecError("진행 체크리스트 하위 항목보다 상위 단계가 먼저 와야 해요.")
             stages[-1]["children"].append(task)
         else:
             stages.append(task)
@@ -386,7 +386,7 @@ def render_milestone_checklist(lines: list[str], start: int) -> tuple[str, int]:
             not child["checked"] for child in stage["children"]
         ):
             raise SpecError(
-                f"완료한 마일스톤에는 미완료 하위 항목이 남을 수 없어요: {stage['label']}"
+                f"완료한 진행 단계에는 미완료 하위 항목이 남을 수 없어요: {stage['label']}"
             )
 
     completed = sum(stage["checked"] for stage in stages)
@@ -434,7 +434,7 @@ def render_milestone_checklist(lines: list[str], start: int) -> tuple[str, int]:
         )
 
     panel = (
-        '<section class="milestone-panel" aria-label="마일스톤 진행 상황">'
+        '<section class="milestone-panel" aria-label="진행 체크리스트">'
         '<div class="milestone-progress-copy"><strong>진행 단계</strong>'
         f'<span>{completed} / {total} 완료</span></div>'
         '<div class="milestone-progress-track" aria-hidden="true">'
@@ -548,7 +548,7 @@ def render_markdown(body: str) -> tuple[str, list[tuple[int, str, str]]]:
             )
             continue
 
-        if current_section == "마일스톤" and TASK_PATTERN.match(line):
+        if current_section in {"진행 체크리스트", "마일스톤"} and TASK_PATTERN.match(line):
             flush_paragraph()
             flush_list()
             checklist_html, index = render_milestone_checklist(lines, index)

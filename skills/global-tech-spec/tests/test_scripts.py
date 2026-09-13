@@ -79,7 +79,7 @@ html: "./tech-spec.html"
 
 권한 검사를 확인해요.
 
-## 마일스톤
+## 진행 체크리스트
 
 | 단계 | 완료 조건 |
 | --- | --- |
@@ -185,7 +185,7 @@ status: "승인"
 
 # 체크리스트 예시
 
-## 마일스톤
+## 진행 체크리스트
 
 - [x] 1. 스펙 승인
   - [x] 개발자가 HTML을 검토해요.
@@ -203,6 +203,9 @@ status: "승인"
             destination = source.with_suffix(".html")
             output = destination.read_text(encoding="utf-8")
             self.assertIn('class="milestone-panel"', output)
+            self.assertIn('<h2 id="진행-체크리스트">진행 체크리스트</h2>', output)
+            self.assertIn('href="#진행-체크리스트">진행 체크리스트</a>', output)
+            self.assertIn('aria-label="진행 체크리스트"', output)
             self.assertIn("1 / 3 완료", output)
             self.assertIn('style="width: 33%"', output)
             self.assertIn('class="milestone-step is-complete"', output)
@@ -231,6 +234,33 @@ status: "승인"
             self.assertIn("<dt>상태</dt><dd>승인</dd>", output)
             self.assertEqual(self.run_sync(root, "--check", str(source)).returncode, 0)
 
+    def test_renders_existing_milestone_checklists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "docs/tech-specs/001-example/tech-spec.md"
+            source.parent.mkdir(parents=True)
+            source.write_text(
+                """---
+kind: tech-spec
+title: "기존 문서"
+---
+
+# 기존 문서
+
+## 마일스톤
+
+- [ ] 1. 검증
+  - [ ] 동작을 확인해요.
+""",
+                encoding="utf-8",
+            )
+
+            result = self.run_sync(root, str(source))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            output = source.with_suffix(".html").read_text(encoding="utf-8")
+            self.assertIn('<h2 id="마일스톤">마일스톤</h2>', output)
+            self.assertIn('class="milestone-panel"', output)
+
     def test_rejects_completed_stage_with_unchecked_condition(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -244,7 +274,7 @@ title: "완료 조건 검증"
 
 # 완료 조건 검증
 
-## 마일스톤
+## 진행 체크리스트
 
 - [x] 1. 구현
   - [ ] 검증해요.
