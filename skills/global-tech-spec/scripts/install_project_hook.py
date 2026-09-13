@@ -14,6 +14,8 @@ from typing import Any
 HOOK_DIRECTORY = Path(".codex/hooks")
 HOOK_CONFIG = Path(".codex/hooks.json")
 HOOK_SCRIPT_NAME = "sync_tech_specs.py"
+LEGACY_POST_TOOL_MATCHER = "apply_patch|Edit|Write"
+POST_TOOL_MATCHER = "Bash|apply_patch|Edit|Write"
 HOOK_COMMAND = (
     'python3 "$(git rev-parse --show-toplevel)/.codex/hooks/sync_tech_specs.py" '
     '--root "$(git rev-parse --show-toplevel)" --hook'
@@ -79,6 +81,20 @@ def add_hook(config: dict[str, Any], event: str, matcher: str | None) -> bool:
         raise InstallError(
             f"기존 hooks.{event} 값이 배열이 아니어서 안전하게 병합할 수 없어요."
         )
+    if event == "PostToolUse":
+        for group in groups:
+            if not isinstance(group, dict):
+                continue
+            handlers = group.get("hooks")
+            if (
+                group.get("matcher") == LEGACY_POST_TOOL_MATCHER
+                and isinstance(handlers, list)
+                and len(handlers) == 1
+                and isinstance(handlers[0], dict)
+                and handlers[0].get("command") == HOOK_COMMAND
+            ):
+                group["matcher"] = POST_TOOL_MATCHER
+                return True
     if event_has_sync_hook(groups):
         return False
 
@@ -105,7 +121,7 @@ def install(root: Path) -> tuple[bool, bool]:
 
     config_path = root / HOOK_CONFIG
     config = load_config(config_path)
-    post_added = add_hook(config, "PostToolUse", "apply_patch|Edit|Write")
+    post_added = add_hook(config, "PostToolUse", POST_TOOL_MATCHER)
     stop_added = add_hook(config, "Stop", None)
     config_changed = post_added or stop_added or not config_path.exists()
 

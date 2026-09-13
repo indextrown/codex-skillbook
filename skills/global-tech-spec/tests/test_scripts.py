@@ -124,6 +124,21 @@ html: "./tech-spec.html"
                 stale.stdout,
             )
 
+            source.write_text(
+                source.read_text(encoding="utf-8").replace(
+                    'status: "초안"', 'status: "승인"'
+                ),
+                encoding="utf-8",
+            )
+            approved = self.run_sync(
+                root, "docs/tech-specs/001-project-email-notifications/tech-spec.md"
+            )
+            self.assertEqual(approved.returncode, 0, approved.stdout + approved.stderr)
+            self.assertIn(
+                "<dt>상태</dt><dd>승인</dd>",
+                destination.read_text(encoding="utf-8"),
+            )
+
     def test_rejects_a_tech_spec_without_a_sequence_number(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -239,6 +254,10 @@ class InstallProjectHookTests(unittest.TestCase):
             config = json.loads(first_config_text)
             self.assertIn("SessionStart", config["hooks"])
             self.assertEqual(len(config["hooks"]["PostToolUse"]), 1)
+            self.assertEqual(
+                config["hooks"]["PostToolUse"][0]["matcher"],
+                "Bash|apply_patch|Edit|Write",
+            )
             self.assertEqual(len(config["hooks"]["Stop"]), 1)
             self.assertTrue(
                 (root / ".codex" / "hooks" / "sync_tech_specs.py").is_file()
@@ -263,6 +282,29 @@ class InstallProjectHookTests(unittest.TestCase):
                 hook_result.returncode, 0, hook_result.stdout + hook_result.stderr
             )
             self.assertEqual(json.loads(hook_result.stdout), {})
+
+    def test_upgrades_legacy_post_tool_matcher_without_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = self.run_installer(root)
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+
+            config_path = root / ".codex" / "hooks.json"
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config["hooks"]["PostToolUse"][0]["matcher"] = "apply_patch|Edit|Write"
+            config_path.write_text(json.dumps(config), encoding="utf-8")
+
+            upgraded = self.run_installer(root)
+            self.assertEqual(upgraded.returncode, 0, upgraded.stdout + upgraded.stderr)
+            upgraded_config = json.loads(config_path.read_text(encoding="utf-8"))
+            groups = upgraded_config["hooks"]["PostToolUse"]
+            self.assertEqual(len(groups), 1)
+            self.assertEqual(groups[0]["matcher"], "Bash|apply_patch|Edit|Write")
+
+            updated_text = config_path.read_text(encoding="utf-8")
+            repeated = self.run_installer(root)
+            self.assertEqual(repeated.returncode, 0, repeated.stdout + repeated.stderr)
+            self.assertEqual(config_path.read_text(encoding="utf-8"), updated_text)
 
     def test_does_not_overwrite_invalid_hook_config(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
