@@ -9,15 +9,17 @@ const readline = require('node:readline/promises');
 
 const KIT_NAME = 'ios-uikit';
 const KIT_DIRECTORY = path.resolve(__dirname, '..', 'project-doc-kits', KIT_NAME);
+const SUPPORTED_INCLUDES = new Set(['gitflow', 'rxswift']);
 
 const USAGE = `사용법:
   project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
-                              [--include gitflow] [--dry-run | --apply]
+                              [--include gitflow] [--include rxswift]
+                              [--dry-run | --apply]
 
 옵션:
   --target        대상 프로젝트의 절대 경로 (기본값: 현재 디렉터리)
   --project-name  문서에 표시할 프로젝트 이름 (기본값: 대상 폴더 이름)
-  --include       선택 문서 추가 (현재 지원: gitflow)
+  --include       선택 문서 추가 (gitflow: 1개, rxswift: 3개; 여러 번 지정 가능)
   --dry-run       생성 예정 파일만 표시하고 쓰지 않음
   --apply         대화형 확인 없이 적용
   --help          사용법 표시
@@ -31,14 +33,14 @@ function parseArguments(args) {
     throw new Error(`지원하는 명령은 "init ${KIT_NAME}"뿐이에요.\n${USAGE}`);
   }
 
-  const options = { dryRun: false, apply: false, include: null };
+  const options = { dryRun: false, apply: false, include: new Set() };
   const seen = new Set();
   for (let index = 2; index < args.length; index += 1) {
     const flag = args[index];
     if (!['--target', '--project-name', '--include', '--dry-run', '--apply'].includes(flag)) {
       throw new Error(`알 수 없는 옵션이에요: ${flag}`);
     }
-    if (seen.has(flag)) {
+    if (seen.has(flag) && flag !== '--include') {
       throw new Error(`옵션을 중복 지정했어요: ${flag}`);
     }
     seen.add(flag);
@@ -53,14 +55,19 @@ function parseArguments(args) {
       }
       if (flag === '--target') options.target = value;
       if (flag === '--project-name') options.projectName = value;
-      if (flag === '--include') options.include = value;
+      if (flag === '--include') {
+        if (!SUPPORTED_INCLUDES.has(value)) {
+          throw new Error(`지원하지 않는 선택 문서예요: ${value}`);
+        }
+        if (options.include.has(value)) {
+          throw new Error(`선택 문서를 중복 지정했어요: ${value}`);
+        }
+        options.include.add(value);
+      }
     }
   }
   if (options.dryRun && options.apply) {
     throw new Error('--dry-run과 --apply는 함께 사용할 수 없어요.');
-  }
-  if (options.include && options.include !== 'gitflow') {
-    throw new Error(`지원하지 않는 선택 문서예요: ${options.include}`);
   }
   if (options.target && !path.isAbsolute(options.target)) {
     throw new Error('--target에는 절대 경로를 지정해 주세요.');
@@ -136,10 +143,10 @@ async function loadEntries(projectName, include) {
       throw new Error(`대상 경로가 중복돼요: ${item.target}`);
     }
     targets.add(item.target);
-    if (item.include && item.include !== 'gitflow') {
+    if (item.include && !SUPPORTED_INCLUDES.has(item.include)) {
       throw new Error(`알 수 없는 선택 문서예요: ${item.include}`);
     }
-    if (item.include && item.include !== include) continue;
+    if (item.include && !include.has(item.include)) continue;
 
     const templatePath = path.join(kitRoot, ...sourceSegments);
     const resolvedTemplate = await fs.realpath(templatePath);

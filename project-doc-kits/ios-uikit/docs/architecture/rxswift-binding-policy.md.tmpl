@@ -1,0 +1,95 @@
+---
+title: RxSwift 바인딩 정책 검토안
+description: UIKit 화면에서 Rx 구독의 수명, 메모리, UI 스레드와 Driver 사용 여부를 팀 규칙으로 정할 때 확인하는 문서예요.
+---
+
+# {{PROJECT_NAME}} RxSwift 바인딩 정책 검토안
+
+> 이 문서는 RxSwift를 사용하는 UIKit 화면의 바인딩 기준을 정리해요. 생성 명령은 프로젝트의 코드와 의존성을 분석하지 않아요. 팀 규칙으로 적용하기 전에 현재 구현과 합의 내용을 확인해요.
+
+## 먼저 결정할 것
+
+| 항목 | 검토할 기준 | 프로젝트에서 확인할 것 |
+| --- | --- | --- |
+| 구독 수명 | 화면이 소유한 구독은 화면의 `DisposeBag`에 넣어요. | 화면 재사용·해제 시점과 ViewModel의 구독 소유자를 확인해요. |
+| 클로저 캡처 | 화면이 소유한 구독의 클로저에서 `self`를 참조하면 순환 참조를 피하도록 캡처를 검토해요. | `self`와 `DisposeBag`의 소유 관계를 확인해요. |
+| Input/Output | UI 이벤트는 종료되지 않는 Relay로 전달하고, 출력은 상태·이벤트의 성격에 맞게 정해요. | 기존 ViewModel 계약과 테스트 방식을 확인해요. |
+| `Driver`·`Signal` | 미사용은 라이브러리 제약이 아니라 팀의 선택이에요. | 현재 화면에서 사용 중인지, 대체 시 보장해야 할 조건을 확인해요. |
+| UI 스레드 | 화면을 바꾸기 전에 메인 스케줄러 전달을 보장해요. | 원본 스트림의 실행 위치와 UI 바인딩 지점을 확인해요. |
+| 연속 탭 | 중복 실행을 막아야 할 때만 입력 정책을 정해요. | 무시·최신 요청·대기 중 어떤 동작이 맞는지 확인해요. |
+
+## 화면이 소유한 구독의 수명을 맞춰요
+
+화면의 `DisposeBag`에 구독을 넣으면 화면이 해제될 때 구독도 정리할 수 있어요. ViewModel이 자체적으로 소유하는 장기 구독이라면 화면의 Bag을 넘겨 쓸지, ViewModel이 별도 수명을 가질지 먼저 정해요. 모든 구독에 같은 Bag을 기계적으로 사용하지 않아요.
+
+```swift
+output.data
+    .observe(on: MainScheduler.instance)
+    .bind(onNext: { [weak self] data in
+        self?.rootView.updateData(data)
+    })
+    .disposed(by: disposeBag)
+```
+
+이 예제에서는 화면이 `disposeBag`과 바인딩 클로저를 함께 소유하므로 `[weak self]`를 사용해요. `self`를 참조하지 않는 클로저까지 무조건 약하게 캡처할 필요는 없어요. 반대로 `.disposed(by:)`를 빠뜨렸다고 모든 스트림이 반드시 메모리 누수로 이어지는 것도 아니에요. 종료되지 않는 UI 스트림의 구독 수명이 길어질 수 있으므로 명시적으로 관리해요.
+
+## Input과 Output의 역할을 구분해요
+
+| 역할 | 사용 가능한 타입 | 선택 기준 |
+| --- | --- | --- |
+| 탭 같은 일회성 Input | `PublishRelay<Event>` | 초기값이 없고 입력이 오류로 종료되면 안 될 때 사용해요. |
+| 현재 값을 전달하는 Input | `BehaviorRelay<Value>` 또는 UI의 `ControlProperty<Value>` | 최초 값이 필요한지, 이미 UI 속성이 그 값을 제공하는지 확인해요. |
+| 현재 상태 Output | `BehaviorRelay<State>` 또는 읽기 전용 `Observable<State>` | 최신 상태 보관 책임을 ViewModel 내부에 두고, 공개 계약의 변경 권한을 정해요. |
+| 일회성 Output | `PublishRelay<Event>` 또는 `Observable<Event>` | 새 구독자에게 이전 사건을 다시 보내면 안 될 때 사용해요. |
+
+Relay는 `.error`와 `.completed`를 내보내지 않지만 메인 스레드나 공유 정책까지 보장하지는 않아요. ViewModel이 Relay를 공개할 때는 외부에서 `accept`해도 되는지 검토해요. 외부에서 값을 바꾸면 안 된다면 `asObservable()`로 읽기 전용 출력만 공개할 수 있어요.
+
+## `Driver` 미사용은 명시적으로 선택해요
+
+`Driver`를 사용하지 않는다면 `Observable`과 Relay로 화면을 연결할 수 있어요. 이 선택은 RxSwift의 일반 규칙이 아니라 팀의 바인딩 정책이에요. `Driver`는 오류 없음, 메인 스케줄러 전달, 연결 중 공유와 최신 값 재전달을 묶어 제공해요. `Signal`도 오류 없이 메인 스케줄러에서 전달하며 과거 값을 재전달하지 않아요. 이 Trait를 쓰지 않기로 결정했다면 대체 바인딩에서 필요한 보장을 직접 확인해요.
+
+```swift
+output.items
+    .observe(on: MainScheduler.instance)
+    .bind(onNext: { [weak self] items in
+        self?.rootView.updateItems(items)
+    })
+    .disposed(by: disposeBag)
+```
+
+이 코드는 전달 스레드만 명시해요. `output.items`가 오류를 내면 구독이 끝나고, 원본이 Cold 스트림이면 구독마다 작업이 다시 실행될 수 있어요. 오류 처리와 공유가 필요한 경우에는 ViewModel에서 정책을 정한 뒤 UI에 노출해요. 팀이 `Driver`를 이미 사용한다면 이 검토안을 이유로 제거하지 않아요.
+
+## Input은 생성한 뒤 개별 바인딩할 수 있어요
+
+Input 객체를 먼저 만들고 각 UI 이벤트를 연결하면 바인딩 위치와 구독 수명을 한곳에서 확인하기 쉬워요. 생성자에 스트림을 바로 전달하는 방식도 가능하므로, 팀이 이미 쓰는 계약을 확인한 뒤 한 방식을 유지해요.
+
+```swift
+let input = ProfileViewModel.Input()
+
+refreshButton.rx.tap
+    .bind(to: input.refreshTap)
+    .disposed(by: disposeBag)
+```
+
+전체 흐름과 View의 `Binder` 예시는 [Input/Output 패턴](rxswift-input-output.md)에서 확인해요.
+
+## 연속 탭과 프로젝트 전용 확장을 구분해요
+
+`defaultTapThrottle()`은 RxSwift 기본 연산자가 아니라 별도로 정의해야 하는 확장이에요. 코드에 이 확장이 있고 동작이 팀의 중복 입력 정책과 맞을 때만 사용해요. `rx.viewDidAppear`, `unwrap()` 같은 이름도 별도 확장일 수 있으므로 정의를 먼저 찾아봐요.
+
+연속 탭은 단순히 시간을 제한할지, 진행 중인 요청이 끝날 때까지 새 입력을 무시할지에 따라 의미가 달라요. 전자는 `throttle`, 후자는 `flatMapFirst` 같은 선택을 검토해요. 간격과 동시 실행 정책은 기능 요구사항에서 정해요.
+
+## 적용 전 체크리스트
+
+- [ ] 프로젝트가 RxSwift·RxCocoa를 실제로 사용하는지 확인해요.
+- [ ] 화면과 ViewModel의 구독 수명을 어디서 관리하는지 확인해요.
+- [ ] `self`를 캡처하는 바인딩 클로저의 순환 참조 가능성을 확인해요.
+- [ ] UI 바인딩의 메인 스레드, 오류, 중복 구독 정책을 확인해요.
+- [ ] `Driver`·`Signal` 사용 여부를 현재 코드와 팀 합의로 결정해요.
+- [ ] `defaultTapThrottle()`, 화면 생명주기 Rx 확장, `unwrap()`의 정의와 동작을 확인해요.
+
+## 관련 문서
+
+- [RxSwift 타입과 연산자](rxswift.md)에서 라이브러리 기능을 찾아봐요.
+- [Input/Output 패턴](rxswift-input-output.md)에서 화면 바인딩 예시를 확인해요.
+- [RxSwift 공식 Trait 문서](https://github.com/ReactiveX/RxSwift/blob/main/Documentation/Traits.md)에서 `Driver`, `Signal`, `ControlEvent`의 보장을 확인해요.

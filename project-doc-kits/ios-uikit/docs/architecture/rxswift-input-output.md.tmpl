@@ -1,0 +1,184 @@
+---
+title: RxSwift Input/Output 바인딩 패턴
+description: UIKit 이벤트를 ViewModel Input에 연결하고 Output을 화면에 표시하는 흐름과 Binder 활용 예시를 정리해요.
+---
+
+# {{PROJECT_NAME}} RxSwift Input/Output 바인딩 패턴
+
+> 이 문서는 RxSwift·RxCocoa를 쓰는 UIKit 프로젝트에서 검토할 수 있는 화면 바인딩 예시예요. `ProfileViewModel`과 화면 타입은 설명용 이름이며 대상 프로젝트의 실제 코드가 아니에요. 기존 ViewModel 계약과 구독 수명 규칙을 먼저 확인해요.
+
+## 화면 바인딩의 순서
+
+```text
+UIKit 이벤트 → Input 생성·바인딩 → transform → Output → UI 바인딩
+```
+
+Input 객체를 먼저 만들고 각 UI 이벤트를 개별 바인딩하면 어느 이벤트가 어떤 기능을 시작하는지 찾기 쉬워요. `transform`은 Input을 받아 Output을 만드는 단일 진입점으로 사용할 수 있어요. 이 구조는 한 가지 팀 패턴이므로 이미 채택한 생성자 주입 방식이 있다면 무조건 바꾸지 않아요.
+
+| 역할 | 예시 타입 | 이유 |
+| --- | --- | --- |
+| 탭·선택 Input | `PublishRelay<Event>` | 초기값 없이 새 입력을 전달해요. |
+| 현재 값을 가진 Input | `BehaviorRelay<Value>` | 구독 직후 현재 값이 필요할 때 사용해요. |
+| 화면 상태 Output | `BehaviorRelay<State>` 또는 `Observable<State>` | 상태 보관·공개 권한과 오류 정책에 맞게 선택해요. |
+| UI 바인딩 | `bind(to:)`, `bind(onNext:)` | 단순 전달과 직접 화면 갱신을 구분해요. |
+
+## Input·Output 계약을 먼저 정해요
+
+다음 코드는 타입과 메서드의 위치를 보여주는 조각이에요. `Profile`과 `ProfileState`는 실제 프로젝트 모델로 바꿔요.
+
+```swift
+struct ProfileInput {
+    let refreshTap = PublishRelay<Void>()
+    let saveTap = PublishRelay<Void>()
+    let searchText = BehaviorRelay<String>(value: "")
+    let selectedProfile = PublishRelay<Profile>()
+    let isEnabled = BehaviorRelay<Bool>(value: false)
+    let formData = PublishRelay<FormData>()
+}
+
+struct ProfileOutput {
+    let state = BehaviorRelay<ProfileState>(value: .idle)
+    let isLoading = BehaviorRelay<Bool>(value: false)
+    let profile = PublishRelay<ProfileDisplayModel>()
+}
+
+protocol ProfileViewModelType {
+    /// 화면 입력을 기능 동작에 연결하고 UI 출력을 반환해요.
+    ///
+    /// - Parameters:
+    ///   - input: 화면에서 전달한 탭과 입력값이에요.
+    ///   - disposeBag: 이 변환에서 만드는 구독의 수명을 관리해요.
+    /// - Returns: 화면 상태와 일회성 이벤트를 담은 출력이에요.
+    func transform(
+        input: ProfileInput,
+        disposeBag: DisposeBag
+    ) -> ProfileOutput
+}
+```
+
+`BehaviorRelay`는 최신 값을 보관하지만 외부에서도 `accept`할 수 있어요. ViewModel 외부에서 Output을 수정하면 안 된다면 프로토콜에는 `Observable`을 노출하고 내부에서만 Relay를 보관해요. `transform`에 화면의 Bag을 넘기는 패턴을 채택했다면 ViewModel 구독이 화면 수명에 묶인다는 점도 확인해요.
+
+## ViewController에서 Input을 개별 바인딩해요
+
+```swift
+private func bindViewModel() {
+    let input = ProfileInput()
+
+    refreshButton.rx.tap
+        .bind(to: input.refreshTap)
+        .disposed(by: disposeBag)
+
+    searchTextField.rx.text.orEmpty
+        .bind(to: input.searchText)
+        .disposed(by: disposeBag)
+
+    let output = viewModel.transform(
+        input: input,
+        disposeBag: disposeBag
+    )
+
+    output.state
+        .observe(on: MainScheduler.instance)
+        .bind(onNext: { [weak self] state in
+            self?.render(state)
+        })
+        .disposed(by: disposeBag)
+}
+```
+
+UI가 제공하는 `rx.tap`을 다시 Subject로 감쌀 필요는 없어요. 위 예시는 Input 객체가 Relay를 요구하므로 `bind(to:)`로 연결해요. 화면에서 단순히 `Observable<Void>`를 받는 계약이라면 [타입과 연산자 가이드](rxswift.md)의 직접 전달 예시도 가능해요.
+
+## 자주 쓰는 Input 연결
+
+### 버튼과 선택 이벤트
+
+```swift
+saveButton.rx.tap
+    .bind(to: input.saveTap)
+    .disposed(by: disposeBag)
+
+tableView.rx.modelSelected(Profile.self)
+    .bind(to: input.selectedProfile)
+    .disposed(by: disposeBag)
+```
+
+셀을 선택한 뒤 선택 표시도 해제해야 한다면 `itemSelected`와 `modelSelected`를 함께 받아요. 같은 셀에 대한 이벤트가 맞는지, 테이블 갱신 중 인덱스가 바뀌지 않는지도 확인해요.
+
+### 텍스트와 값 변환
+
+```swift
+searchTextField.rx.text.orEmpty
+    .debounce(.milliseconds(300), scheduler: MainScheduler.instance)
+    .bind(to: input.searchText)
+    .disposed(by: disposeBag)
+
+switchView.rx.isOn
+    .bind(to: input.isEnabled)
+    .disposed(by: disposeBag)
+```
+
+`300ms`는 검색 입력을 설명하기 위한 예시 값이에요. 실제 대기 시간은 기능 요구사항에 맞춰 정해요. `ControlProperty`는 구독할 때 현재 값을 전달할 수 있으므로 최초 이벤트가 필요한지 확인해요.
+
+### 여러 값을 결합하기
+
+```swift
+Observable.combineLatest(
+    nameTextField.rx.text.orEmpty,
+    emailTextField.rx.text.orEmpty
+)
+.map { name, email in
+    FormData(name: name, email: email)
+}
+.bind(to: input.formData)
+.disposed(by: disposeBag)
+```
+
+`combineLatest`는 각 입력의 최신 값을 묶어요. 단순히 여러 탭을 같은 동작으로 보낼 때는 같은 타입의 스트림을 합치는 `merge`가 더 적합해요.
+
+### 화면 생명주기 이벤트
+
+`rx.viewDidAppear`와 `rx.viewWillDisappear`를 사용하려면 해당 Rx 확장이 정의되어 있어야 해요. 확장이 없다면 UIKit 수명 주기 메서드와 현재 이벤트 전달 방식을 사용해요.
+
+## Output을 화면에 연결해요
+
+단일 UI 속성은 RxCocoa가 제공하는 Binder에 바로 연결할 수 있어요.
+
+```swift
+output.isLoading
+    .observe(on: MainScheduler.instance)
+    .bind(to: activityIndicator.rx.isAnimating)
+    .disposed(by: disposeBag)
+```
+
+여러 UI 속성을 한 상태로 갱신한다면 View에 Binder를 둘 수 있어요. 복잡한 화면 변경이 ViewController의 클로저마다 흩어지는 일을 줄여요.
+
+```swift
+final class ProfileView: UIView {
+    var profile: Binder<ProfileDisplayModel> {
+        Binder(self) { view, model in
+            view.nameLabel.text = model.name
+            view.detailLabel.text = model.detail
+        }
+    }
+}
+
+output.profile
+    .observe(on: MainScheduler.instance)
+    .bind(to: profileView.profile)
+    .disposed(by: disposeBag)
+```
+
+`nameLabel`, `detailLabel`, `ProfileDisplayModel`은 화면에 맞게 바꿔요. 일회성 알림이나 화면 이동은 최신 상태를 보관하는 Relay와 구분해서 다뤄요. `PublishRelay`를 쓰는 경우에도 UI 전달 스레드를 확인해요.
+
+## 바인딩 전 확인할 것
+
+- [ ] Input을 만들고 이벤트를 연결하는 위치가 한눈에 보이는지 확인해요.
+- [ ] 모든 장기 UI 구독의 수명을 화면이나 ViewModel의 Bag으로 관리하는지 확인해요.
+- [ ] Output의 상태와 일회성 이벤트를 구분했는지 확인해요.
+- [ ] UI를 갱신하는 스트림의 메인 스레드와 오류 종료 정책을 확인해요.
+- [ ] `defaultTapThrottle()`, `unwrap()`, 화면 생명주기 Rx 확장 같은 프로젝트 전용 API를 실제로 제공하는지 확인해요.
+
+## 관련 문서
+
+- [RxSwift 타입과 연산자](rxswift.md)에서 각 타입의 일반 동작을 찾아봐요.
+- [바인딩 정책 검토안](rxswift-binding-policy.md)에서 메모리·스레드·`Driver` 사용 여부를 확인해요.
