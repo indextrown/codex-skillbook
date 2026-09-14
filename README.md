@@ -78,6 +78,40 @@ npx skills update --global global-humanize-korean
 npx skills remove global-humanize-korean --agent codex --global --yes
 ```
 
+## 프로젝트 문서 키트 사용하기
+
+프로젝트 문서 키트는 전역 스킬이 아니에요. UIKit 프로젝트 루트에서 명령어를 실행하면 `AGENTS.md`와 개발 문서 초안을 그 프로젝트에 만들어요. 저장소를 직접 복제하거나 대상 프로젝트에 npm 의존성을 추가할 필요는 없어요. Node.js 22 이상과 npm 10 이상이 필요해요.
+
+`project-docs-v1.0.0` 태그를 발행한 뒤에는 아래 명령을 사용할 수 있어요. 이 태그가 발행되기 전에는 실행되지 않아요.
+
+```bash
+cd /absolute/path/MyUIKitApp
+
+# 생성 목록을 확인한 뒤 적용 여부를 물어요.
+npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit
+
+# 프로젝트에 쓰지 않고 생성 목록만 확인해요.
+npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit --dry-run
+
+# 비대화형 환경에서 확인 질문 없이 적용해요.
+npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit --apply
+
+# 팀의 Git 흐름 문서가 필요할 때만 추가해요.
+npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit --include gitflow
+
+# RxSwift와 RxCocoa를 사용하는 프로젝트에만 문서 세 개를 추가해요.
+npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit --include rxswift
+
+# 두 선택 옵션을 함께 사용할 수도 있어요.
+npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit --include gitflow --include rxswift
+```
+
+기본 실행은 프로젝트 루트의 `AGENTS.md`, 문서 길잡이 `docs/Root.md`, UIKit 계층 설계 예시 `docs/architecture/architecture.md`, `docs/development/testing.md`를 만들어요. 길잡이의 표에서 아키텍처와 테스트 문서로 이동할 수 있어요. 아키텍처 문서는 Clean Architecture와 MVVM을 조합한 **적용 가능한 예시**이지 대상 프로젝트를 분석한 결과가 아니에요. 실제 구조와 다르면 수정하세요. `--include gitflow`을 지정하면 `docs/development/gitflow.md`를 만들어요. `--include rxswift`를 지정하면 `docs/architecture/`에 타입·연산자 가이드 `rxswift.md`, 바인딩 정책 검토안 `rxswift-binding-policy.md`, Input/Output 예시 `rxswift-input-output.md`를 함께 만들어요. 두 옵션은 함께 지정할 수 있어요. 현재 디렉터리 외의 경로에 생성하려면 `--target /absolute/path/MyUIKitApp`을 지정하고, 문서에 표시할 이름을 바꾸려면 `--project-name MyUIKitApp`을 사용해요.
+
+명령은 생성할 파일과 기존 파일의 상태를 먼저 보여줘요. 기존 파일과 사용자가 수정한 문서는 덮어쓰지 않아요. 같은 내용의 파일은 `UNCHANGED`, 다른 내용의 기존 파일은 `SKIP_EXISTING`으로 표시해요. 건너뛴 파일이 있으면 적용 명령은 종료 코드 `2`를 반환해요. 생성 문서의 `확인 필요` 항목은 프로젝트 코드·설정·팀 규칙을 확인한 뒤 채워 주세요.
+
+처음 실행할 때 npm이 패키지를 내려받을지 물을 수 있어요. `npx --yes`는 이 npm 질문만 생략하고, 문서 키트의 쓰기 확인은 생략하지 않아요. 문서 키트의 쓰기 확인을 생략하는 옵션은 `--apply`예요. npm은 실행 패키지를 캐시에 보관할 수 있지만 대상 프로젝트에 키트 저장소를 만들지는 않아요. 버전을 바꾸려면 명령의 GitHub 태그를 교체하세요.
+
 ## 자주 사용하는 스킬
 
 | 한글 제목 | 스킬 | 설명 |

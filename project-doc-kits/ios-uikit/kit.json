@@ -1,0 +1,41 @@
+{
+  "name": "ios-uikit",
+  "files": [
+    {
+      "template": "AGENTS.md.tmpl",
+      "target": "AGENTS.md"
+    },
+    {
+      "template": "docs/Root.md.tmpl",
+      "target": "docs/Root.md"
+    },
+    {
+      "template": "docs/architecture/architecture.md.tmpl",
+      "target": "docs/architecture/architecture.md"
+    },
+    {
+      "template": "docs/architecture/rxswift.md.tmpl",
+      "target": "docs/architecture/rxswift.md",
+      "include": "rxswift"
+    },
+    {
+      "template": "docs/architecture/rxswift-binding-policy.md.tmpl",
+      "target": "docs/architecture/rxswift-binding-policy.md",
+      "include": "rxswift"
+    },
+    {
+      "template": "docs/architecture/rxswift-input-output.md.tmpl",
+      "target": "docs/architecture/rxswift-input-output.md",
+      "include": "rxswift"
+    },
+    {
+      "template": "docs/development/testing.md.tmpl",
+      "target": "docs/development/testing.md"
+    },
+    {
+      "template": "docs/development/gitflow.md.tmpl",
+      "target": "docs/development/gitflow.md",
+      "include": "gitflow"
+    }
+  ]
+}

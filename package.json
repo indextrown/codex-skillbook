@@ -1,0 +1,17 @@
+{
+  "name": "codex-skillbook-project-docs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Project documentation starter kits for Codex",
+  "bin": {
+    "project-docs": "bin/project-docs.js"
+  },
+  "files": [
+    "bin/",
+    "project-doc-kits/"
+  ],
+  "engines": {
+    "node": ">=22",
+    "npm": ">=10"
+  }
+}
