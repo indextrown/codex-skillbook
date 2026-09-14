@@ -100,7 +100,7 @@ npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit --apply
 npx github:indextrown/codex-skillbook#project-docs-v1.0.0 init ios-uikit --include gitflow
 ```
 
-기본 실행은 프로젝트 루트의 `AGENTS.md`, `docs/architecture/overview.md`, `docs/development/testing.md`를 만들어요. `--include gitflow`을 지정하면 `docs/development/gitflow.md`도 만들어요. 다른 프로젝트 경로를 대상으로 하려면 `--target /absolute/path/MyUIKitApp`을 지정하고, 문서에 표시할 이름을 바꾸려면 `--project-name MyUIKitApp`을 사용해요.
+기본 실행은 프로젝트 루트의 `AGENTS.md`, 문서 길잡이 `docs/Root.md`, UIKit 계층 설계 예시 `docs/architecture/architecture.md`, `docs/development/testing.md`를 만들어요. 길잡이의 표에서 아키텍처와 테스트 문서로 이동할 수 있어요. 아키텍처 문서는 Clean Architecture와 MVVM을 조합한 **적용 가능한 예시**이지 대상 프로젝트를 분석한 결과가 아니에요. 실제 구조와 다르면 수정하세요. `--include gitflow`을 지정하면 `docs/development/gitflow.md`도 만들어요. 다른 프로젝트 경로를 대상으로 하려면 `--target /absolute/path/MyUIKitApp`을 지정하고, 문서에 표시할 이름을 바꾸려면 `--project-name MyUIKitApp`을 사용해요.
 
 명령은 생성할 파일과 기존 파일의 상태를 먼저 보여줘요. 기존 파일과 사용자가 수정한 문서는 덮어쓰지 않아요. 같은 내용의 파일은 `UNCHANGED`, 다른 내용의 기존 파일은 `SKIP_EXISTING`으로 표시해요. 건너뛴 파일이 있으면 적용 명령은 종료 코드 `2`를 반환해요. 생성 문서의 `확인 필요` 항목은 프로젝트 코드·설정·팀 규칙을 확인한 뒤 채워 주세요.
 

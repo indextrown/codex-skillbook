@@ -6,8 +6,12 @@
       "target": "AGENTS.md"
     },
     {
-      "template": "docs/architecture/overview.md.tmpl",
-      "target": "docs/architecture/overview.md"
+      "template": "docs/Root.md.tmpl",
+      "target": "docs/Root.md"
+    },
+    {
+      "template": "docs/architecture/architecture.md.tmpl",
+      "target": "docs/architecture/architecture.md"
     },
     {
       "template": "docs/development/testing.md.tmpl",

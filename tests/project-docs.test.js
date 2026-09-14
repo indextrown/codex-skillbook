@@ -27,13 +27,14 @@ async function invoke(args, { tty = false, confirm = false } = {}) {
   return { code, output, errors };
 }
 
-test('--dry-run previews the three default files without changing the project', async (t) => {
+test('--dry-run previews the four default files without changing the project', async (t) => {
   const root = project(t);
   const result = await invoke(['init', 'ios-uikit', '--target', root, '--dry-run']);
 
   assert.equal(result.code, 0);
   assert.match(result.output, /CREATE\s+AGENTS\.md/u);
-  assert.match(result.output, /CREATE\s+docs\/architecture\/overview\.md/u);
+  assert.match(result.output, /CREATE\s+docs\/Root\.md/u);
+  assert.match(result.output, /CREATE\s+docs\/architecture\/architecture\.md/u);
   assert.match(result.output, /CREATE\s+docs\/development\/testing\.md/u);
   assert.doesNotMatch(result.output, /gitflow\.md/u);
   assert.deepEqual(fs.readdirSync(root), []);
@@ -66,10 +67,31 @@ test('interactive confirmation creates only the documented default tree', async 
 
   assert.equal(result.code, 0, result.errors);
   assert.deepEqual(fs.readdirSync(root).sort(), ['AGENTS.md', 'docs']);
-  assert.deepEqual(fs.readdirSync(path.join(root, 'docs')).sort(), ['architecture', 'development']);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'docs')).sort(), ['Root.md', 'architecture', 'development']);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'architecture')), ['architecture.md']);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')), ['testing.md']);
   assert.match(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), /MyUIKitApp/u);
-  assert.match(fs.readFileSync(path.join(root, 'docs', 'architecture', 'overview.md'), 'utf8'), /확인 필요/u);
+  const rootDoc = fs.readFileSync(path.join(root, 'docs', 'Root.md'), 'utf8');
+  assert.match(rootDoc, /\[아키텍처\]\(architecture\/architecture\.md\)/u);
+  assert.match(rootDoc, /\[테스트\]\(development\/testing\.md\)/u);
+  assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'gitflow.md')), false);
+  const architecture = fs.readFileSync(path.join(root, 'docs', 'architecture', 'architecture.md'), 'utf8');
+  assert.match(architecture, /## 목차/u);
+  assert.match(architecture, /## 계층별 구조/u);
+  assert.match(architecture, /### App: 시작점과 의존성 조립/u);
+  assert.match(architecture, /### Domain: 비즈니스 규칙과 계약/u);
+  assert.match(architecture, /### Data: 계약 구현과 데이터 변환/u);
+  assert.match(architecture, /### Infrastructure: 외부 시스템 접근/u);
+  assert.match(architecture, /### Presentation: 화면과 화면 상태/u);
+  assert.match(architecture, /Presentation → Domain ← Data → Infrastructure/u);
+  assert.match(architecture, /### 화면에서 데이터까지: 프로필 새로고침 예시/u);
+  assert.match(architecture, /## 주요 패턴과 사용 기술/u);
+  assert.match(architecture, /## 새 기능 개발 체크리스트/u);
+  assert.match(architecture, /## 관련 문서/u);
+  assert.match(architecture, /\[문서 길잡이\]\(\.\.\/Root\.md\)/u);
+  assert.match(architecture, /\[테스트\]\(\.\.\/development\/testing\.md\)/u);
+  assert.match(architecture, /프로젝트 코드를 분석하지 않아요/u);
+  assert.match(architecture, /이 키트가 RxSwift 도입을 요구하지는 않아요/u);
   assert.equal(fs.existsSync(path.join(root, 'package.json')), false);
   assert.equal(fs.existsSync(path.join(root, 'package-lock.json')), false);
 });
@@ -80,7 +102,13 @@ test('--include gitflow adds the optional document', async (t) => {
 
   assert.equal(result.code, 0, result.errors);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')).sort(), ['gitflow.md', 'testing.md']);
-  assert.match(fs.readFileSync(path.join(root, 'docs', 'development', 'gitflow.md'), 'utf8'), /확인 필요/u);
+  const gitflow = fs.readFileSync(path.join(root, 'docs', 'development', 'gitflow.md'), 'utf8');
+  assert.match(gitflow, /확인 필요/u);
+  assert.match(gitflow, /## 한 작업을 PR로 보내는 흐름/u);
+  assert.match(gitflow, /git diff --staged/u);
+  assert.match(gitflow, /## 커밋·PR 전 체크리스트/u);
+  assert.match(gitflow, /기본 브랜치가 `main`이고 원격 이름이 `origin`인 경우/u);
+  assert.doesNotMatch(gitflow, /Yeobaek|Seoul|MapBox|Tuist/u);
 });
 
 test('the executable uses the current project directory by default', (t) => {
@@ -103,7 +131,7 @@ test('re-running the command leaves generated files unchanged', async (t) => {
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 3);
+  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 4);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
 });
 
@@ -115,7 +143,7 @@ test('a differing existing file is preserved while missing files are created', a
 
   assert.equal(result.code, 2);
   assert.match(result.output, /SKIP_EXISTING\s+AGENTS\.md/u);
-  assert.match(result.output, /생성 2개, 기존 파일 보존 1개/u);
+  assert.match(result.output, /생성 3개, 기존 파일 보존 1개/u);
   assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), '팀에서 작성한 규칙\n');
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'testing.md')), true);
 });
@@ -200,6 +228,9 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   const packagedPaths = packResult[0].files.map((file) => file.path);
   assert.ok(packagedPaths.includes('bin/project-docs.js'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/kit.json'));
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/Root.md.tmpl'));
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/architecture.md.tmpl'));
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/development/gitflow.md.tmpl'));
   assert.equal(packagedPaths.some((file) => file.startsWith('skills/') || file.startsWith('docs/')), false);
 
   const archive = JSON.parse(execFileSync('npm', ['pack', '--pack-destination', packDirectory, '--json'], {
