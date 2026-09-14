@@ -1,0 +1,22 @@
+{
+  "name": "ios-uikit",
+  "files": [
+    {
+      "template": "AGENTS.md.tmpl",
+      "target": "AGENTS.md"
+    },
+    {
+      "template": "docs/architecture/overview.md.tmpl",
+      "target": "docs/architecture/overview.md"
+    },
+    {
+      "template": "docs/development/testing.md.tmpl",
+      "target": "docs/development/testing.md"
+    },
+    {
+      "template": "docs/development/gitflow.md.tmpl",
+      "target": "docs/development/gitflow.md",
+      "include": "gitflow"
+    }
+  ]
+}
