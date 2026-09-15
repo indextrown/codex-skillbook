@@ -33,5 +33,11 @@
       "target": "docs/development/gitflow.md",
       "include": "gitflow"
     }
+  ],
+  "retiredFiles": [
+    {
+      "template": "retired/docs/Root.md.tmpl",
+      "target": "docs/Root.md"
+    }
   ]
 }

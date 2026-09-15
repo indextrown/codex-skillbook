@@ -12,8 +12,8 @@ const KIT_NAME = 'ios-uikit';
 const KIT_DIRECTORY = path.resolve(__dirname, '..', 'project-doc-kits', KIT_NAME);
 const MANIFEST_SEGMENTS = ['.project-docs', 'manifest.json'];
 const SUPPORTED_INCLUDES = new Set(['gitflow', 'rxswift']);
-const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'RETIRED']);
-const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED']);
+const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'DELETE', 'RETIRED']);
+const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED', 'SKIP_RETIRED_MODIFIED']);
 
 const USAGE = `사용법:
   project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
@@ -179,18 +179,21 @@ function renderTemplate(source, projectName) {
 
 async function loadEntries(projectName, include) {
   const manifest = JSON.parse(await fs.readFile(path.join(KIT_DIRECTORY, 'kit.json'), 'utf8'));
-  if (manifest.name !== KIT_NAME || !Array.isArray(manifest.files)) {
+  if (manifest.name !== KIT_NAME || !Array.isArray(manifest.files)
+      || (manifest.retiredFiles !== undefined && !Array.isArray(manifest.retiredFiles))) {
     throw new Error('키트 설정을 읽을 수 없어요.');
   }
   const kitRoot = await fs.realpath(KIT_DIRECTORY);
   const knownTargets = new Set();
+  const configuredTargets = new Set();
   const entries = [];
   for (const item of manifest.files) {
     const sourceSegments = relativeSegments(item.template, '템플릿');
     const targetSegments = relativeSegments(item.target, '대상');
-    if (knownTargets.has(item.target)) {
+    if (configuredTargets.has(item.target)) {
       throw new Error(`대상 경로가 중복돼요: ${item.target}`);
     }
+    configuredTargets.add(item.target);
     knownTargets.add(item.target);
     if (item.include && !SUPPORTED_INCLUDES.has(item.include)) {
       throw new Error(`알 수 없는 선택 문서예요: ${item.include}`);
@@ -206,7 +209,29 @@ async function loadEntries(projectName, include) {
     const content = renderTemplate(await fs.readFile(templatePath, 'utf8'), projectName);
     entries.push({ target: item.target, segments: targetSegments, content, templateHash: contentHash(content) });
   }
-  return { entries, knownTargets };
+
+  const retiredEntries = [];
+  for (const item of manifest.retiredFiles || []) {
+    const sourceSegments = relativeSegments(item.template, '관리 종료 템플릿');
+    const targetSegments = relativeSegments(item.target, '관리 종료 대상');
+    if (configuredTargets.has(item.target)) {
+      throw new Error(`대상 경로가 중복돼요: ${item.target}`);
+    }
+    configuredTargets.add(item.target);
+    const templatePath = path.join(kitRoot, ...sourceSegments);
+    const resolvedTemplate = await fs.realpath(templatePath);
+    const sourceStat = await fs.lstat(templatePath);
+    if (!isWithin(kitRoot, resolvedTemplate) || sourceStat.isSymbolicLink() || !sourceStat.isFile()) {
+      throw new Error(`키트 밖의 관리 종료 템플릿은 읽을 수 없어요: ${item.template}`);
+    }
+    const content = renderTemplate(await fs.readFile(templatePath, 'utf8'), projectName);
+    retiredEntries.push({
+      target: item.target,
+      segments: targetSegments,
+      templateHash: contentHash(content),
+    });
+  }
+  return { entries, knownTargets, retiredEntries };
 }
 
 async function inspectParents(root, segments) {
@@ -249,6 +274,32 @@ async function inspectEntry(root, entry, trackedHash) {
     destination,
     existingHash,
     status,
+  };
+}
+
+async function inspectRetiredEntry(root, target, trackedHash, retiredTemplateHash) {
+  const segments = relativeSegments(target, '관리 종료 대상');
+  await inspectParents(root, segments);
+  const destination = path.join(root, ...segments);
+  if (!isWithin(root, destination)) {
+    throw new Error(`프로젝트 밖의 문서는 삭제할 수 없어요: ${target}`);
+  }
+  const stats = await lstatOrNull(destination);
+  if (!stats) {
+    return trackedHash ? { target, segments, destination, status: 'RETIRED' } : null;
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    if (!trackedHash) return null;
+    throw new Error(`관리 종료 대상이 일반 파일이 아니거나 심볼릭 링크예요: ${destination}`);
+  }
+  const existingHash = contentHash(await fs.readFile(destination));
+  if (!trackedHash && existingHash !== retiredTemplateHash) return null;
+  return {
+    target,
+    segments,
+    destination,
+    expectedHash: trackedHash || retiredTemplateHash,
+    status: existingHash === (trackedHash || retiredTemplateHash) ? 'DELETE' : 'SKIP_RETIRED_MODIFIED',
   };
 }
 
@@ -336,6 +387,38 @@ async function applyEntry(root, entry, trackedHash) {
   }
 }
 
+async function deleteRetiredEntry(root, entry, trackedHash) {
+  const updated = await inspectRetiredEntry(
+    root,
+    entry.target,
+    trackedHash || entry.expectedHash,
+    entry.expectedHash,
+  );
+  if (updated.status !== 'DELETE') return updated.status;
+
+  let handle;
+  try {
+    handle = await fs.open(updated.destination, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+    const openedStat = await handle.stat();
+    if (!openedStat.isFile()) {
+      throw new Error(`삭제 대상이 일반 파일이 아니에요: ${updated.destination}`);
+    }
+    if (contentHash(await handle.readFile()) !== updated.expectedHash) return 'SKIP_RETIRED_MODIFIED';
+    const currentStat = await fs.lstat(updated.destination);
+    if (currentStat.isSymbolicLink() || !currentStat.isFile()
+        || currentStat.dev !== openedStat.dev || currentStat.ino !== openedStat.ino) {
+      return 'SKIP_RETIRED_MODIFIED';
+    }
+    await fs.unlink(updated.destination);
+    return 'DELETE';
+  } catch (error) {
+    if (error.code === 'ENOENT') return 'RETIRED';
+    throw error;
+  } finally {
+    if (handle) await handle.close();
+  }
+}
+
 async function writeManifest(root, manifest, files) {
   if (!manifest.exists && files.size === 0) return;
   const content = serializeManifest(files);
@@ -375,13 +458,24 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const root = await resolveTarget(options.target);
     const projectName = markdownText(options.projectName || path.basename(root));
     const manifest = await loadManifest(root);
-    const { entries, knownTargets } = await loadEntries(projectName, options.include);
+    const { entries, knownTargets, retiredEntries } = await loadEntries(projectName, options.include);
     const plan = [];
     for (const entry of entries) {
       plan.push(await inspectEntry(root, entry, manifest.files.get(entry.target)));
     }
-    for (const target of manifest.files.keys()) {
-      if (!knownTargets.has(target)) plan.push({ target, status: 'RETIRED' });
+    const retiredByTarget = new Map(retiredEntries.map((entry) => [entry.target, entry]));
+    const retiredTargets = new Set([
+      ...[...manifest.files.keys()].filter((target) => !knownTargets.has(target)),
+      ...retiredByTarget.keys(),
+    ]);
+    for (const target of retiredTargets) {
+      const retiredEntry = await inspectRetiredEntry(
+        root,
+        target,
+        manifest.files.get(target),
+        retiredByTarget.get(target)?.templateHash,
+      );
+      if (retiredEntry) plan.push(retiredEntry);
     }
     printPlan(io, root, plan);
     if (options.dryRun) return 0;
@@ -402,17 +496,20 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
 
     const results = [];
     for (const entry of plan) {
-      const status = entry.status !== 'RETIRED' && ACTIONABLE_STATUSES.has(entry.status)
-        ? await applyEntry(root, entry, manifest.files.get(entry.target))
-        : entry.status;
+      let status = entry.status;
+      if (entry.status === 'DELETE') {
+        status = await deleteRetiredEntry(root, entry, manifest.files.get(entry.target));
+      } else if (entry.status !== 'RETIRED' && ACTIONABLE_STATUSES.has(entry.status)) {
+        status = await applyEntry(root, entry, manifest.files.get(entry.target));
+      }
       results.push({ target: entry.target, status, templateHash: entry.templateHash });
     }
 
-    const nextHashes = new Map(
-      [...manifest.files].filter(([target]) => knownTargets.has(target)),
-    );
+    const nextHashes = new Map(manifest.files);
     for (const result of results) {
-      if (['CREATE', 'UPDATE', 'TRACK', 'UNCHANGED'].includes(result.status)) {
+      if (['DELETE', 'RETIRED'].includes(result.status)) {
+        nextHashes.delete(result.target);
+      } else if (['CREATE', 'UPDATE', 'TRACK', 'UNCHANGED'].includes(result.status)) {
         nextHashes.set(result.target, result.templateHash);
       }
     }
@@ -422,10 +519,11 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     for (const result of results) io.stdout.write(`${result.status.padEnd(16)} ${result.target}\n`);
     const created = results.filter((result) => result.status === 'CREATE').length;
     const updated = results.filter((result) => result.status === 'UPDATE').length;
+    const deleted = results.filter((result) => result.status === 'DELETE').length;
     const tracked = results.filter((result) => result.status === 'TRACK').length;
     const retired = results.filter((result) => result.status === 'RETIRED').length;
     const skipped = results.filter((result) => PRESERVED_STATUSES.has(result.status)).length;
-    io.stdout.write(`생성 ${created}개, 갱신 ${updated}개, 추적 ${tracked}개, 관리 종료 ${retired}개, 사용자 문서 보존 ${skipped}개예요.\n`);
+    io.stdout.write(`생성 ${created}개, 갱신 ${updated}개, 삭제 ${deleted}개, 추적 ${tracked}개, 관리 종료 ${retired}개, 사용자 문서 보존 ${skipped}개예요.\n`);
     return skipped ? 2 : 0;
   } catch (error) {
     io.stderr.write(`오류: ${error.message}\n`);
