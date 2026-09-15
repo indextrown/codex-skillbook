@@ -134,7 +134,9 @@ test('--include gitflow adds the optional document', async (t) => {
   assert.match(gitflow, /git log -20 --pretty=format/u);
   assert.match(gitflow, /\| `feat` \|/u);
   assert.match(gitflow, /#### PR 제목을 작성해요/u);
+  assert.match(gitflow, /\[docs\] Git 작업 흐름을 개선한다/u);
   assert.match(gitflow, /#### PR 본문은 저장소 템플릿을 따라요/u);
+  assert.match(gitflow, /새로 작성하는 PR 본문은 `-다`체로 통일/u);
   assert.match(gitflow, /\.github\/PULL_REQUEST_TEMPLATE\.md/u);
   assert.match(gitflow, /PR 템플릿이 없어요\. 이 저장소에 새 템플릿을 만들까요\?/u);
   assert.match(gitflow, /명시적으로 요청하지 않았다면 새 이슈를 만들지 않아요/u);
