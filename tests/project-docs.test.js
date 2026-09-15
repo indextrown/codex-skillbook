@@ -130,9 +130,17 @@ test('--include gitflow adds the optional document', async (t) => {
   assert.match(gitflow, /확인 필요/u);
   assert.match(gitflow, /## 한 작업을 PR로 보내는 흐름/u);
   assert.match(gitflow, /git diff --staged/u);
+  assert.match(gitflow, /### 5\. 커밋 규칙을 확인하고 커밋해요/u);
+  assert.match(gitflow, /git log -20 --pretty=format/u);
+  assert.match(gitflow, /\| `feat` \|/u);
+  assert.match(gitflow, /#### PR 제목을 작성해요/u);
+  assert.match(gitflow, /#### PR 본문은 저장소 템플릿을 따라요/u);
+  assert.match(gitflow, /\.github\/PULL_REQUEST_TEMPLATE\.md/u);
+  assert.match(gitflow, /PR 템플릿이 없어요\. 이 저장소에 새 템플릿을 만들까요\?/u);
+  assert.match(gitflow, /명시적으로 요청하지 않았다면 새 이슈를 만들지 않아요/u);
   assert.match(gitflow, /## 커밋·PR 전 체크리스트/u);
   assert.match(gitflow, /기본 브랜치가 `main`이고 원격 이름이 `origin`인 경우/u);
-  assert.doesNotMatch(gitflow, /Yeobaek|Seoul|MapBox|Tuist/u);
+  assert.doesNotMatch(gitflow, /Yeobaek|Seoul|MapBox|Tuist|PopPang/u);
 });
 
 test('--include rxswift adds the three linked documents without project-specific claims', async (t) => {

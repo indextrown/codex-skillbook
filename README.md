@@ -126,7 +126,7 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --include gitflow --include rxswift
 ```
 
-`gitflow`은 `docs/development/gitflow.md`를 만들어요. `rxswift`는 `docs/architecture/` 아래에 `rxswift.md`, `rxswift-binding-policy.md`, `rxswift-input-output.md`를 만들어요.
+`gitflow`은 커밋 규칙과 PR 제목·본문 작성 흐름을 담은 `docs/development/gitflow.md`를 만들어요. `rxswift`는 `docs/architecture/` 아래에 `rxswift.md`, `rxswift-binding-policy.md`, `rxswift-input-output.md`를 만들어요.
 
 ### 쓰기 전에 확인하기
 
