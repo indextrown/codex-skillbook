@@ -80,45 +80,86 @@ npx skills remove global-humanize-korean --agent codex --global --yes
 
 ## 프로젝트 문서 키트 사용하기
 
-프로젝트 문서 키트는 전역 스킬이 아니에요. UIKit 프로젝트 루트에서 명령어를 실행하면 `AGENTS.md`와 개발 문서 초안을 그 프로젝트에 만들어요. 저장소를 직접 복제하거나 대상 프로젝트에 npm 의존성을 추가할 필요는 없어요. Node.js 22 이상과 npm 10 이상이 필요해요.
+프로젝트 문서 키트는 UIKit 프로젝트에 `AGENTS.md`와 개발 문서의 출발점을 만들어요. 처음 설치할 때도, 최신 템플릿을 반영할 때도 같은 명령을 사용해요. 키트 저장소를 직접 복제하거나 프로젝트에 npm 의존성을 추가하지 않아요.
 
-현재 공개된 버전은 `project-docs-v1.0.0`이에요. `--package`로 실행할 패키지를, `--` 뒤의 `project-docs`로 실행 파일을 명시해 npm 환경에 관계없이 같은 진입점을 사용해요.
+Node.js 22 이상과 npm 10 이상이 필요해요. 명령은 별도 버전을 지정하지 않고 이 저장소의 기본 브랜치에 병합된 최신 키트를 사용해요.
+
+### 빠르게 시작하기
+
+UIKit 프로젝트 루트에서 다음 명령을 실행해요.
 
 ```bash
 cd /absolute/path/MyUIKitApp
 
-# 생성 목록을 확인한 뒤 적용 여부를 물어요.
-npx --yes --package=github:indextrown/codex-skillbook#project-docs-v1.0.0 -- project-docs init ios-uikit
-
-# 프로젝트에 쓰지 않고 생성 목록만 확인해요.
-npx --yes --package=github:indextrown/codex-skillbook#project-docs-v1.0.0 -- project-docs init ios-uikit --dry-run
-
-# 비대화형 환경에서 확인 질문 없이 적용해요.
-npx --yes --package=github:indextrown/codex-skillbook#project-docs-v1.0.0 -- project-docs init ios-uikit --apply
-
-# 팀의 Git 흐름 문서가 필요할 때만 추가해요.
-npx --yes --package=github:indextrown/codex-skillbook#project-docs-v1.0.0 -- project-docs init ios-uikit --include gitflow
-
-# RxSwift와 RxCocoa를 사용하는 프로젝트에만 문서 세 개를 추가해요.
-npx --yes --package=github:indextrown/codex-skillbook#project-docs-v1.0.0 -- project-docs init ios-uikit --include rxswift
-
-# 두 선택 옵션을 함께 사용할 수도 있어요.
-npx --yes --package=github:indextrown/codex-skillbook#project-docs-v1.0.0 -- project-docs init ios-uikit --include gitflow --include rxswift
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit
 ```
 
-기본 실행은 프로젝트 루트의 `AGENTS.md`, 문서 길잡이 `docs/Root.md`, UIKit 계층 설계 예시 `docs/architecture/architecture.md`, `docs/development/testing.md`를 만들어요. 길잡이의 표에서 아키텍처와 테스트 문서로 이동할 수 있어요. 아키텍처 문서는 Clean Architecture와 MVVM을 조합한 **적용 가능한 예시**이지 대상 프로젝트를 분석한 결과가 아니에요. 실제 구조와 다르면 수정하세요. `--include gitflow`을 지정하면 `docs/development/gitflow.md`를 만들어요. `--include rxswift`를 지정하면 `docs/architecture/`에 타입·연산자 가이드 `rxswift.md`, 바인딩 정책 검토안 `rxswift-binding-policy.md`, Input/Output 예시 `rxswift-input-output.md`를 함께 만들어요. 두 옵션은 함께 지정할 수 있어요. 현재 디렉터리 외의 경로에 생성하려면 `--target /absolute/path/MyUIKitApp`을 지정하고, 문서에 표시할 이름을 바꾸려면 `--project-name MyUIKitApp`을 사용해요.
+명령은 파일별 변경 사항을 먼저 보여주고 `적용할까요? [y/N]`를 물어요. 승인하면 다음 파일을 만들어요.
 
-명령은 생성할 파일과 기존 파일의 상태를 먼저 보여줘요. 기존 파일과 사용자가 수정한 문서는 덮어쓰지 않아요. 같은 내용의 파일은 `UNCHANGED`, 다른 내용의 기존 파일은 `SKIP_EXISTING`으로 표시해요. 건너뛴 파일이 있으면 적용 명령은 종료 코드 `2`를 반환해요. 생성 문서의 `확인 필요` 항목은 프로젝트 코드·설정·팀 규칙을 확인한 뒤 채워 주세요.
+```text
+MyUIKitApp/
+├── .project-docs/
+│   └── manifest.json                 ← 안전한 갱신에 쓰는 내용 해시
+├── AGENTS.md                         ← Codex 작업 지침
+└── docs/
+    ├── Root.md                       ← 문서 길잡이
+    ├── architecture/
+    │   └── architecture.md           ← UIKit 아키텍처 검토 예시
+    └── development/
+        └── testing.md                ← 테스트 가이드
+```
 
-`npx --yes`는 npm의 패키지 설치 질문만 생략하고, 문서 키트의 쓰기 확인은 생략하지 않아요. 문서 키트의 쓰기 확인을 생략하는 옵션은 `--apply`예요. npm은 실행 패키지를 캐시에 보관할 수 있지만 대상 프로젝트에 키트 저장소를 만들지는 않아요.
+아키텍처 문서는 프로젝트를 자동 분석한 결과가 아니에요. 생성 후 실제 코드와 팀 규칙을 확인해 `확인 필요` 항목을 다듬어 주세요.
 
-명령이 아무 출력 없이 종료된다면 GitHub 태그가 실제로 존재하는지 먼저 확인해요. 태그가 없으면 npm이 `project-docs`를 실행하기 전에 종료되어 CLI 안내가 보이지 않을 수 있어요.
+### 필요한 문서만 추가하기
+
+Git 작업 흐름이나 RxSwift 문서가 필요한 프로젝트에서만 선택 옵션을 사용해요.
 
 ```bash
-git ls-remote --exit-code --tags https://github.com/indextrown/codex-skillbook.git refs/tags/project-docs-v1.0.0
+# Git 작업 흐름 문서 한 개를 추가해요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --include gitflow
+
+# RxSwift 타입·바인딩·Input/Output 문서 세 개를 추가해요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --include rxswift
+
+# 두 문서 묶음을 함께 추가해요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --include gitflow --include rxswift
 ```
 
-새 버전은 `package.json`의 버전을 올려 병합한 뒤 `Release Project Docs CLI` 워크플로로 검증하고 태그를 발행해요. README에는 발행이 끝난 태그만 안내해요.
+`gitflow`은 `docs/development/gitflow.md`를 만들어요. `rxswift`는 `docs/architecture/` 아래에 `rxswift.md`, `rxswift-binding-policy.md`, `rxswift-input-output.md`를 만들어요.
+
+### 쓰기 전에 확인하기
+
+파일을 만들지 않고 결과만 확인하려면 `--dry-run`을 사용해요. CI처럼 질문에 답할 수 없는 환경에서는 `--apply`로 적용을 명시해요.
+
+```bash
+# 프로젝트를 바꾸지 않고 예정 상태만 확인해요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --dry-run
+
+# 문서 키트의 확인 질문 없이 적용해요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --apply
+```
+
+현재 디렉터리 대신 다른 프로젝트에 적용하려면 `--target /absolute/path/MyUIKitApp`을 사용해요. 문서에 표시할 이름은 `--project-name MyUIKitApp`으로 바꿀 수 있어요. `npx --yes`는 npm의 패키지 실행 질문만 생략하고, 문서 키트의 적용 질문은 생략하지 않아요.
+
+### 같은 명령으로 최신 문서 반영하기
+
+처음 사용한 `init ios-uikit` 명령을 다시 실행하면 최신 템플릿과 현재 문서를 비교해요. 별도 `update` 명령은 필요하지 않아요.
+
+`.project-docs/manifest.json`에는 마지막으로 적용한 문서의 내용 해시만 저장해요. 버전 번호는 없어요. 현재 파일의 해시가 마지막 적용 해시와 같을 때만 새 템플릿으로 갱신하므로, 사용자가 손댄 문서는 덮어쓰지 않아요. 팀원이 같은 기준으로 갱신할 수 있도록 이 파일도 문서와 함께 커밋해 주세요.
+
+이미 `docs/` 폴더가 있어도 괜찮아요. 키트가 관리하는 경로만 확인하고 다른 문서는 건드리지 않아요. 관리 이력이 없는 기존 파일은 현재 템플릿과 완전히 같을 때만 추적을 시작하고, 내용이 다르면 그대로 보존해요.
+
+| 상태 | 의미 |
+| --- | --- |
+| `CREATE` | 없는 문서를 새로 만들어요. |
+| `UPDATE` | 키트가 만들었고 사용자가 수정하지 않은 문서를 최신화해요. |
+| `TRACK` | 현재 템플릿과 같은 기존 문서를 변경 없이 관리 대상으로 등록해요. |
+| `UNCHANGED` | 문서와 템플릿이 이미 같아요. |
+| `SKIP_MODIFIED` | 키트 적용 후 사용자가 수정한 문서라서 보존해요. |
+| `SKIP_UNTRACKED` | 관리 이력이 없는 기존 문서라서 보존해요. |
+
+보존한 파일이 있으면 종료 코드 `2`를 반환해 자동화에서도 부분 적용을 구분할 수 있어요. 경로 순회, 심볼릭 링크, 파일·디렉터리 충돌은 적용 전에 거부해요.
 
 ## 자주 사용하는 스킬
 
