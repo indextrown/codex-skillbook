@@ -81,7 +81,17 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs')).sort(), ['Root.md', 'architecture', 'development']);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'architecture')), ['architecture.md']);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')), ['testing.md']);
-  assert.match(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), /MyUIKitApp/u);
+  const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /MyUIKitApp/u);
+  assert.match(agents, /## 문서부터 찾아요/u);
+  assert.match(agents, /\| 확인할 내용 \| 먼저 볼 문서 \| 적용 기준 \|/u);
+  assert.match(agents, /\[문서 길잡이\]\(docs\/Root\.md\)/u);
+  assert.match(agents, /\[아키텍처\]\(docs\/architecture\/architecture\.md\)/u);
+  assert.match(agents, /\[테스트\]\(docs\/development\/testing\.md\)/u);
+  assert.match(agents, /## 상황별 작업 기준/u);
+  assert.match(agents, /선택 문서가 없어요/u);
+  assert.match(agents, /## 변경을 마칠 때/u);
+  assert.doesNotMatch(agents, /Yeobaek|Navi 3\.0|PopPang/u);
   const rootDoc = fs.readFileSync(path.join(root, 'docs', 'Root.md'), 'utf8');
   assert.match(rootDoc, /\[아키텍처\]\(architecture\/architecture\.md\)/u);
   assert.match(rootDoc, /\[테스트\]\(development\/testing\.md\)/u);
