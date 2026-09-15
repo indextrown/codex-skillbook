@@ -83,14 +83,15 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')), ['testing.md']);
   const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
   assert.match(agents, /MyUIKitApp/u);
-  assert.match(agents, /## 문서부터 찾아요/u);
-  assert.match(agents, /\| 확인할 내용 \| 먼저 볼 문서 \| 적용 기준 \|/u);
+  assert.match(agents, /## 작업 전에 확인할 문서/u);
+  assert.match(agents, /\| 확인할 내용 \| 문서 \| 확인 기준 \|/u);
   assert.match(agents, /\[아키텍처\]\(docs\/architecture\/architecture\.md\)/u);
   assert.match(agents, /\[테스트\]\(docs\/development\/testing\.md\)/u);
   assert.doesNotMatch(agents, /Root\.md/u);
-  assert.match(agents, /## 상황별 작업 기준/u);
+  assert.match(agents, /## 작업 중 판단 기준/u);
   assert.match(agents, /선택 문서가 없어요/u);
-  assert.match(agents, /## 변경을 마칠 때/u);
+  assert.match(agents, /## 작업 완료 전 확인/u);
+  assert.match(agents, /프로젝트에 맞는 테스트를 실행하고 결과를 기록했어요/u);
   assert.doesNotMatch(agents, /Yeobaek|Navi 3\.0|PopPang/u);
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'gitflow.md')), false);
   assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'rxswift.md')), false);
@@ -206,6 +207,7 @@ test('omitting --include later keeps optional documents under management', async
 
   assert.equal(result.code, 0, result.errors);
   assert.doesNotMatch(result.output, /RETIRED/u);
+  assert.doesNotMatch(result.output, /DELETE/u);
   const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
   assert.equal(Object.hasOwn(manifest.files, 'docs/development/gitflow.md'), true);
   assert.equal(Object.hasOwn(manifest.files, 'docs/architecture/rxswift.md'), true);
@@ -286,7 +288,7 @@ test('re-running the command updates a tracked file that the user did not edit',
   assert.equal(updatedManifest.files['AGENTS.md'], sha256(fs.readFileSync(agentsPath)));
 });
 
-test('re-running retires a removed generated document without deleting it', async (t) => {
+test('re-running deletes a retired generated document that was not edited', async (t) => {
   const root = project(t);
   const args = ['init', 'ios-uikit', '--target', root, '--apply'];
   assert.equal((await invoke(args)).code, 0);
@@ -300,11 +302,89 @@ test('re-running retires a removed generated document without deleting it', asyn
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.match(result.output, /RETIRED\s+docs\/Root\.md/u);
-  assert.match(result.output, /관리 종료 1개/u);
-  assert.deepEqual(fs.readFileSync(retiredPath), retiredContent);
+  assert.match(result.output, /DELETE\s+docs\/Root\.md/u);
+  assert.match(result.output, /삭제 1개/u);
+  assert.equal(fs.existsSync(retiredPath), false);
   const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
   assert.equal(Object.hasOwn(updatedManifest.files, 'docs/Root.md'), false);
+});
+
+test('re-running deletes an unchanged legacy document after it was untracked', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const retiredPath = path.join(root, 'docs', 'Root.md');
+  const retiredTemplate = fs.readFileSync(path.resolve(
+    __dirname,
+    '..',
+    'project-doc-kits',
+    'ios-uikit',
+    'retired',
+    'docs',
+    'Root.md.tmpl',
+  ), 'utf8');
+  fs.writeFileSync(retiredPath, retiredTemplate.replaceAll('{{PROJECT_NAME}}', path.basename(root)));
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /DELETE\s+docs\/Root\.md/u);
+  assert.equal(fs.existsSync(retiredPath), false);
+});
+
+test('re-running preserves an edited retired document', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const retiredPath = path.join(root, 'docs', 'Root.md');
+  const generatedContent = Buffer.from('# 이전 문서 길잡이\n');
+  const editedContent = Buffer.from('# 팀이 수정한 문서 길잡이\n');
+  fs.writeFileSync(retiredPath, editedContent);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  manifest.files['docs/Root.md'] = sha256(generatedContent);
+  fs.writeFileSync(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 2, result.errors);
+  assert.match(result.output, /SKIP_RETIRED_MODIFIED\s+docs\/Root\.md/u);
+  assert.deepEqual(fs.readFileSync(retiredPath), editedContent);
+  const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(updatedManifest.files['docs/Root.md'], sha256(generatedContent));
+});
+
+test('re-running preserves an untracked Root.md that does not match the legacy template', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const rootPath = path.join(root, 'docs', 'Root.md');
+  const customContent = '# 팀에서 만든 문서 홈\n';
+  fs.writeFileSync(rootPath, customContent);
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.doesNotMatch(result.output, /Root\.md/u);
+  assert.equal(fs.readFileSync(rootPath, 'utf8'), customContent);
+});
+
+test('a symlinked retired document is rejected before deletion', async (t) => {
+  const root = project(t);
+  const outside = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const outsideFile = path.join(outside, 'Root.md');
+  fs.writeFileSync(outsideFile, '# 외부 문서\n');
+  fs.symlinkSync(outsideFile, path.join(root, 'docs', 'Root.md'));
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  manifest.files['docs/Root.md'] = sha256(Buffer.from('# 이전 문서 길잡이\n'));
+  fs.writeFileSync(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 1);
+  assert.match(result.errors, /관리 종료 대상이 일반 파일이 아니거나 심볼릭 링크/u);
+  assert.equal(fs.readFileSync(outsideFile, 'utf8'), '# 외부 문서\n');
 });
 
 test('a legacy file that already matches the template can be tracked safely', async (t) => {
@@ -317,7 +397,7 @@ test('a legacy file that already matches the template can be tracked safely', as
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.match(result.output, /생성 0개, 갱신 0개, 추적 3개, 관리 종료 0개, 사용자 문서 보존 0개/u);
+  assert.match(result.output, /생성 0개, 갱신 0개, 삭제 0개, 추적 3개, 관리 종료 0개, 사용자 문서 보존 0개/u);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
   assert.equal(fs.existsSync(manifestPath(root)), true);
 });
@@ -344,7 +424,7 @@ test('a differing existing file is preserved while missing files are created', a
 
   assert.equal(result.code, 2);
   assert.match(result.output, /SKIP_UNTRACKED\s+AGENTS\.md/u);
-  assert.match(result.output, /생성 2개, 갱신 0개, 추적 0개, 관리 종료 0개, 사용자 문서 보존 1개/u);
+  assert.match(result.output, /생성 2개, 갱신 0개, 삭제 0개, 추적 0개, 관리 종료 0개, 사용자 문서 보존 1개/u);
   assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), '팀에서 작성한 규칙\n');
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'testing.md')), true);
 });
@@ -460,6 +540,7 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   assert.ok(packagedPaths.includes('bin/project-docs.js'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/kit.json'));
   assert.equal(packagedPaths.includes('project-doc-kits/ios-uikit/docs/Root.md.tmpl'), false);
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/retired/docs/Root.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/architecture.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/rxswift.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/rxswift-binding-policy.md.tmpl'));
