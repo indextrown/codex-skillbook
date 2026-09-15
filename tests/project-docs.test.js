@@ -36,15 +36,15 @@ async function invoke(args, { tty = false, confirm = false } = {}) {
   return { code, output, errors };
 }
 
-test('--dry-run previews the four default files without changing the project', async (t) => {
+test('--dry-run previews the three default files without changing the project', async (t) => {
   const root = project(t);
   const result = await invoke(['init', 'ios-uikit', '--target', root, '--dry-run']);
 
   assert.equal(result.code, 0);
   assert.match(result.output, /CREATE\s+AGENTS\.md/u);
-  assert.match(result.output, /CREATE\s+docs\/Root\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/architecture\.md/u);
   assert.match(result.output, /CREATE\s+docs\/development\/testing\.md/u);
+  assert.doesNotMatch(result.output, /Root\.md/u);
   assert.doesNotMatch(result.output, /gitflow\.md/u);
   assert.doesNotMatch(result.output, /rxswift\.md/u);
   assert.doesNotMatch(result.output, /rxswift-binding-policy\.md|rxswift-input-output\.md/u);
@@ -78,13 +78,20 @@ test('interactive confirmation creates only the documented default tree', async 
 
   assert.equal(result.code, 0, result.errors);
   assert.deepEqual(fs.readdirSync(root).sort(), ['.project-docs', 'AGENTS.md', 'docs']);
-  assert.deepEqual(fs.readdirSync(path.join(root, 'docs')).sort(), ['Root.md', 'architecture', 'development']);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'docs')).sort(), ['architecture', 'development']);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'architecture')), ['architecture.md']);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')), ['testing.md']);
-  assert.match(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), /MyUIKitApp/u);
-  const rootDoc = fs.readFileSync(path.join(root, 'docs', 'Root.md'), 'utf8');
-  assert.match(rootDoc, /\[아키텍처\]\(architecture\/architecture\.md\)/u);
-  assert.match(rootDoc, /\[테스트\]\(development\/testing\.md\)/u);
+  const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /MyUIKitApp/u);
+  assert.match(agents, /## 문서부터 찾아요/u);
+  assert.match(agents, /\| 확인할 내용 \| 먼저 볼 문서 \| 적용 기준 \|/u);
+  assert.match(agents, /\[아키텍처\]\(docs\/architecture\/architecture\.md\)/u);
+  assert.match(agents, /\[테스트\]\(docs\/development\/testing\.md\)/u);
+  assert.doesNotMatch(agents, /Root\.md/u);
+  assert.match(agents, /## 상황별 작업 기준/u);
+  assert.match(agents, /선택 문서가 없어요/u);
+  assert.match(agents, /## 변경을 마칠 때/u);
+  assert.doesNotMatch(agents, /Yeobaek|Navi 3\.0|PopPang/u);
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'gitflow.md')), false);
   assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'rxswift.md')), false);
   assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'rxswift-binding-policy.md')), false);
@@ -102,8 +109,8 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.match(architecture, /## 주요 패턴과 사용 기술/u);
   assert.match(architecture, /## 새 기능 개발 체크리스트/u);
   assert.match(architecture, /## 관련 문서/u);
-  assert.match(architecture, /\[문서 길잡이\]\(\.\.\/Root\.md\)/u);
   assert.match(architecture, /\[테스트\]\(\.\.\/development\/testing\.md\)/u);
+  assert.doesNotMatch(architecture, /Root\.md/u);
   assert.match(architecture, /프로젝트 코드를 분석하지 않아요/u);
   assert.match(architecture, /이 키트가 RxSwift 도입을 요구하지는 않아요/u);
   const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
@@ -113,7 +120,6 @@ test('interactive confirmation creates only the documented default tree', async 
     'AGENTS.md',
     'docs/architecture/architecture.md',
     'docs/development/testing.md',
-    'docs/Root.md',
   ].sort((left, right) => left.localeCompare(right)));
   assert.equal(manifest.files['AGENTS.md'], sha256(fs.readFileSync(path.join(root, 'AGENTS.md'))));
   assert.equal(fs.existsSync(path.join(root, 'package.json')), false);
@@ -190,6 +196,23 @@ test('multiple --include options can add both optional documents', async (t) => 
   assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'rxswift-input-output.md')), true);
 });
 
+test('omitting --include later keeps optional documents under management', async (t) => {
+  const root = project(t);
+  assert.equal((await invoke([
+    'init', 'ios-uikit', '--target', root, '--include', 'gitflow', '--include', 'rxswift', '--apply',
+  ])).code, 0);
+
+  const result = await invoke(['init', 'ios-uikit', '--target', root, '--apply']);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.doesNotMatch(result.output, /RETIRED/u);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(Object.hasOwn(manifest.files, 'docs/development/gitflow.md'), true);
+  assert.equal(Object.hasOwn(manifest.files, 'docs/architecture/rxswift.md'), true);
+  assert.equal(Object.hasOwn(manifest.files, 'docs/architecture/rxswift-binding-policy.md'), true);
+  assert.equal(Object.hasOwn(manifest.files, 'docs/architecture/rxswift-input-output.md'), true);
+});
+
 test('re-running --include rxswift preserves an edited guide', async (t) => {
   const root = project(t);
   const args = ['init', 'ios-uikit', '--target', root, '--include', 'rxswift', '--apply'];
@@ -239,7 +262,7 @@ test('re-running the command leaves generated files unchanged', async (t) => {
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 4);
+  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 3);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
 });
 
@@ -263,6 +286,27 @@ test('re-running the command updates a tracked file that the user did not edit',
   assert.equal(updatedManifest.files['AGENTS.md'], sha256(fs.readFileSync(agentsPath)));
 });
 
+test('re-running retires a removed generated document without deleting it', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const retiredPath = path.join(root, 'docs', 'Root.md');
+  const retiredContent = Buffer.from('# 이전 문서 길잡이\n');
+  fs.writeFileSync(retiredPath, retiredContent);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  manifest.files['docs/Root.md'] = sha256(retiredContent);
+  fs.writeFileSync(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /RETIRED\s+docs\/Root\.md/u);
+  assert.match(result.output, /관리 종료 1개/u);
+  assert.deepEqual(fs.readFileSync(retiredPath), retiredContent);
+  const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(Object.hasOwn(updatedManifest.files, 'docs/Root.md'), false);
+});
+
 test('a legacy file that already matches the template can be tracked safely', async (t) => {
   const root = project(t);
   const args = ['init', 'ios-uikit', '--target', root, '--apply'];
@@ -273,7 +317,7 @@ test('a legacy file that already matches the template can be tracked safely', as
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.match(result.output, /생성 0개, 갱신 0개, 추적 4개, 사용자 문서 보존 0개/u);
+  assert.match(result.output, /생성 0개, 갱신 0개, 추적 3개, 관리 종료 0개, 사용자 문서 보존 0개/u);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
   assert.equal(fs.existsSync(manifestPath(root)), true);
 });
@@ -288,7 +332,8 @@ test('an existing docs directory and unrelated documents are left untouched', as
 
   assert.equal(result.code, 0, result.errors);
   assert.equal(fs.readFileSync(existing, 'utf8'), '# 팀 결정 기록\n');
-  assert.equal(fs.existsSync(path.join(root, 'docs', 'Root.md')), true);
+  assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'architecture.md')), true);
+  assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'testing.md')), true);
 });
 
 test('a differing existing file is preserved while missing files are created', async (t) => {
@@ -299,7 +344,7 @@ test('a differing existing file is preserved while missing files are created', a
 
   assert.equal(result.code, 2);
   assert.match(result.output, /SKIP_UNTRACKED\s+AGENTS\.md/u);
-  assert.match(result.output, /생성 3개, 갱신 0개, 추적 0개, 사용자 문서 보존 1개/u);
+  assert.match(result.output, /생성 2개, 갱신 0개, 추적 0개, 관리 종료 0개, 사용자 문서 보존 1개/u);
   assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), '팀에서 작성한 규칙\n');
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'testing.md')), true);
 });
@@ -414,7 +459,7 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   const packagedPaths = packResult[0].files.map((file) => file.path);
   assert.ok(packagedPaths.includes('bin/project-docs.js'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/kit.json'));
-  assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/Root.md.tmpl'));
+  assert.equal(packagedPaths.includes('project-doc-kits/ios-uikit/docs/Root.md.tmpl'), false);
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/architecture.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/rxswift.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/rxswift-binding-policy.md.tmpl'));

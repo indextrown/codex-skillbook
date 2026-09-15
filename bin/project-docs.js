@@ -12,7 +12,7 @@ const KIT_NAME = 'ios-uikit';
 const KIT_DIRECTORY = path.resolve(__dirname, '..', 'project-doc-kits', KIT_NAME);
 const MANIFEST_SEGMENTS = ['.project-docs', 'manifest.json'];
 const SUPPORTED_INCLUDES = new Set(['gitflow', 'rxswift']);
-const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK']);
+const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'RETIRED']);
 const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED']);
 
 const USAGE = `사용법:
@@ -183,15 +183,15 @@ async function loadEntries(projectName, include) {
     throw new Error('키트 설정을 읽을 수 없어요.');
   }
   const kitRoot = await fs.realpath(KIT_DIRECTORY);
-  const targets = new Set();
+  const knownTargets = new Set();
   const entries = [];
   for (const item of manifest.files) {
     const sourceSegments = relativeSegments(item.template, '템플릿');
     const targetSegments = relativeSegments(item.target, '대상');
-    if (targets.has(item.target)) {
+    if (knownTargets.has(item.target)) {
       throw new Error(`대상 경로가 중복돼요: ${item.target}`);
     }
-    targets.add(item.target);
+    knownTargets.add(item.target);
     if (item.include && !SUPPORTED_INCLUDES.has(item.include)) {
       throw new Error(`알 수 없는 선택 문서예요: ${item.include}`);
     }
@@ -206,7 +206,7 @@ async function loadEntries(projectName, include) {
     const content = renderTemplate(await fs.readFile(templatePath, 'utf8'), projectName);
     entries.push({ target: item.target, segments: targetSegments, content, templateHash: contentHash(content) });
   }
-  return entries;
+  return { entries, knownTargets };
 }
 
 async function inspectParents(root, segments) {
@@ -375,10 +375,13 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const root = await resolveTarget(options.target);
     const projectName = markdownText(options.projectName || path.basename(root));
     const manifest = await loadManifest(root);
-    const entries = await loadEntries(projectName, options.include);
+    const { entries, knownTargets } = await loadEntries(projectName, options.include);
     const plan = [];
     for (const entry of entries) {
       plan.push(await inspectEntry(root, entry, manifest.files.get(entry.target)));
+    }
+    for (const target of manifest.files.keys()) {
+      if (!knownTargets.has(target)) plan.push({ target, status: 'RETIRED' });
     }
     printPlan(io, root, plan);
     if (options.dryRun) return 0;
@@ -399,13 +402,15 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
 
     const results = [];
     for (const entry of plan) {
-      const status = ACTIONABLE_STATUSES.has(entry.status)
+      const status = entry.status !== 'RETIRED' && ACTIONABLE_STATUSES.has(entry.status)
         ? await applyEntry(root, entry, manifest.files.get(entry.target))
         : entry.status;
       results.push({ target: entry.target, status, templateHash: entry.templateHash });
     }
 
-    const nextHashes = new Map(manifest.files);
+    const nextHashes = new Map(
+      [...manifest.files].filter(([target]) => knownTargets.has(target)),
+    );
     for (const result of results) {
       if (['CREATE', 'UPDATE', 'TRACK', 'UNCHANGED'].includes(result.status)) {
         nextHashes.set(result.target, result.templateHash);
@@ -418,8 +423,9 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const created = results.filter((result) => result.status === 'CREATE').length;
     const updated = results.filter((result) => result.status === 'UPDATE').length;
     const tracked = results.filter((result) => result.status === 'TRACK').length;
+    const retired = results.filter((result) => result.status === 'RETIRED').length;
     const skipped = results.filter((result) => PRESERVED_STATUSES.has(result.status)).length;
-    io.stdout.write(`생성 ${created}개, 갱신 ${updated}개, 추적 ${tracked}개, 사용자 문서 보존 ${skipped}개예요.\n`);
+    io.stdout.write(`생성 ${created}개, 갱신 ${updated}개, 추적 ${tracked}개, 관리 종료 ${retired}개, 사용자 문서 보존 ${skipped}개예요.\n`);
     return skipped ? 2 : 0;
   } catch (error) {
     io.stderr.write(`오류: ${error.message}\n`);
