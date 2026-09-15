@@ -338,3 +338,23 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   }
   assert.equal(fs.existsSync(path.join(target, 'node_modules')), false);
 });
+
+test('README remote examples use the released package version and explicit executable', () => {
+  const packageRoot = path.resolve(__dirname, '..');
+  const packageMetadata = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'));
+  const readme = fs.readFileSync(path.join(packageRoot, 'README.md'), 'utf8');
+  const expectedPrefix = [
+    'npx --yes',
+    `--package=github:indextrown/codex-skillbook#project-docs-v${packageMetadata.version}`,
+    '-- project-docs',
+  ].join(' ');
+  const remoteCommands = readme
+    .split('\n')
+    .filter((line) => line.startsWith('npx ') && line.includes('codex-skillbook#project-docs-v'));
+
+  assert.equal(remoteCommands.length, 6);
+  for (const command of remoteCommands) {
+    assert.ok(command.startsWith(expectedPrefix), command);
+  }
+  assert.doesNotMatch(readme, /^npx github:indextrown\/codex-skillbook#project-docs-v/mu);
+});
