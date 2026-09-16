@@ -80,7 +80,7 @@ npx skills remove global-humanize-korean --agent codex --global --yes
 
 ## 프로젝트 문서 키트 사용하기
 
-프로젝트 문서 키트는 UIKit 프로젝트에 문서 진입점인 `AGENTS.md`와 개발 문서를 만들어요. 처음 설치할 때도, 최신 템플릿을 반영할 때도 같은 명령을 사용해요. 키트 저장소를 직접 복제하거나 프로젝트에 npm 의존성을 추가하지 않아요.
+프로젝트 문서 키트는 UIKit 프로젝트에 `AGENTS.md`, `CLAUDE.md`와 개발 문서를 만들어요. 처음 설치할 때도, 최신 템플릿을 반영할 때도 같은 명령을 사용해요. 키트 저장소를 직접 복제하거나 프로젝트에 npm 의존성을 추가하지 않아요.
 
 Node.js 22 이상과 npm 10 이상이 필요해요. 명령은 별도 버전을 지정하지 않고 이 저장소의 기본 브랜치에 병합된 최신 키트를 사용해요.
 
@@ -100,7 +100,8 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 MyUIKitApp/
 ├── .project-docs/
 │   └── manifest.json                 ← 안전한 갱신에 쓰는 내용 해시
-├── AGENTS.md                         ← Codex 작업 지침
+├── AGENTS.md                         ← 공통 AI 작업 지침
+├── CLAUDE.md                         ← Claude Code용 `AGENTS.md` 연결
 └── docs/
     ├── architecture/
     │   ├── architecture.md           ← UIKit 아키텍처 검토 예시
@@ -109,7 +110,9 @@ MyUIKitApp/
         └── testing.md                ← 테스트 가이드
 ```
 
-`AGENTS.md`에서 작업에 필요한 문서와 적용 기준을 바로 찾아갈 수 있어요. 아키텍처와 DI Container 문서는 프로젝트를 자동 분석한 결과가 아니에요. 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
+`AGENTS.md`에서 작업에 필요한 문서와 적용 기준을 바로 찾아갈 수 있어요. `CLAUDE.md`는 [Claude Code의 파일 가져오기 문법](https://code.claude.com/docs/en/memory#agentsmd)인 `@AGENTS.md`를 사용해 같은 작업 기준을 불러와요. 공통 규칙을 두 파일에 중복해서 관리하지 않아요.
+
+아키텍처와 DI Container 문서는 프로젝트를 자동 분석한 결과가 아니에요. 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
 
 ### 필요한 문서만 추가하기
 

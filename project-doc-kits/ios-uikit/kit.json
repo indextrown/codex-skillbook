@@ -6,6 +6,10 @@
       "target": "AGENTS.md"
     },
     {
+      "template": "CLAUDE.md.tmpl",
+      "target": "CLAUDE.md"
+    },
+    {
       "template": "docs/architecture/architecture.md.tmpl",
       "target": "docs/architecture/architecture.md"
     },
