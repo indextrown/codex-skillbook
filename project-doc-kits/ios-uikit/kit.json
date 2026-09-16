@@ -10,6 +10,10 @@
       "target": "docs/architecture/architecture.md"
     },
     {
+      "template": "docs/architecture/dicontainer.md.tmpl",
+      "target": "docs/architecture/dicontainer.md"
+    },
+    {
       "template": "docs/architecture/rxswift.md.tmpl",
       "target": "docs/architecture/rxswift.md",
       "include": "rxswift"
