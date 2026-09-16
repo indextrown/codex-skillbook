@@ -6,6 +6,10 @@
       "target": "AGENTS.md"
     },
     {
+      "template": "CLAUDE.md.tmpl",
+      "target": "CLAUDE.md"
+    },
+    {
       "template": "docs/architecture/architecture.md.tmpl",
       "target": "docs/architecture/architecture.md"
     },
@@ -31,6 +35,10 @@
     {
       "template": "docs/development/testing.md.tmpl",
       "target": "docs/development/testing.md"
+    },
+    {
+      "template": "docs/development/swiftstyle.md.tmpl",
+      "target": "docs/development/swiftstyle.md"
     },
     {
       "template": "docs/development/gitflow.md.tmpl",

@@ -1,0 +1,610 @@
+# {{PROJECT_NAME}} Swift 스타일 가이드
+
+> UIKit 프로젝트에서 검토할 Swift 코드 스타일 초안이에요. 실제 코드와 팀의 합의를 확인한 뒤 적용해요.
+
+## 목차
+
+- [파일 헤더](#파일-헤더)
+- [코드 포맷팅](#코드-포맷팅)
+- [네이밍](#네이밍)
+- [코드 스타일](#코드-스타일)
+- [MARK 주석](#mark-주석)
+
+---
+
+## 파일 헤더
+
+모든 Swift 파일은 다음 형식의 파일 헤더로 시작해요.
+
+```swift
+//
+//  FileName.swift
+//  ProjectName
+//
+//  Created by Developer on m/d/yy.
+//
+```
+
+| 항목 | 설명 | 예시 |
+| --- | --- | --- |
+| `FileName.swift` | Xcode가 생성한 파일 이름을 사용해요. | `SceneDelegate.swift` |
+| `ProjectName` | Xcode 프로젝트 이름을 사용해요. | `{{PROJECT_NAME}}` |
+| `Created by Developer on m/d/yy.` | 작성자와 생성일을 적어요. | `Created by Developer on 3/5/25.` |
+
+파일 헤더는 다음 규칙을 따라요.
+
+- 작성자 표기는 팀에서 합의한 이름을 사용해요.
+- 날짜는 `m/d/yy` 형식으로 적어요.
+- Copyright 줄은 생략해요.
+- 헤더 다음에 빈 줄 하나를 두고 `import`를 시작해요.
+
+---
+
+## 코드 포맷팅
+
+### import
+
+내장 프레임워크를 먼저 적고 빈 줄 하나를 두어요. 써드파티 라이브러리는 알파벳 순으로 정렬해요.
+
+```swift
+// Preferred
+import Foundation
+import UIKit
+
+import RxCocoa
+import RxSwift
+import SnapKit
+
+// Avoid
+import UIKit
+import RxSwift
+import Foundation
+```
+
+### 들여쓰기
+
+- 매개변수가 여러 개인 함수는 매개변수별로 줄을 바꾸어요.
+- 후행 클로저보다 명시적인 매개변수 라벨을 사용해요.
+
+```swift
+// Preferred
+UIView.animate(
+    withDuration: 1.5,
+    delay: .zero,
+    options: [],
+    animations: {
+
+    },
+    completion: nil
+)
+
+// Avoid
+UIView.animate(withDuration: 1.5, delay: .zero, options: []) {
+
+} completion: { _ in
+
+}
+```
+
+#### 다중 클로저 호출
+
+- 클로저 인자가 두 개 이상인 호출은 소괄호를 세로로 열고 닫아요.
+- 첫 번째 클로저와 `completion` 클로저를 분리해 배치해요.
+- 클로저가 하나인 경우에만 trailing closure를 사용해요.
+
+```swift
+// Preferred
+self.grdbStorage.dbWriter.asyncWrite(
+    { db in
+        try db.execute(sql: "DELETE FROM vesselStaticStaging")
+    },
+    completion: { _, result in
+        switch result {
+        case .success:
+            completion(.success(()))
+
+        case .failure(let error):
+            completion(.failure(error))
+        }
+    }
+)
+
+// Preferred: single closure
+self.grdbStorage.dbWriter.asyncRead { dbResult in
+    // ...
+}
+
+// Avoid
+self.grdbStorage.dbWriter.asyncWrite({ db in
+    try db.execute(sql: "DELETE FROM vesselStaticStaging")
+}, completion: { _, result in
+    // ...
+})
+```
+
+### 띄어쓰기
+
+#### 콜론(`:`)
+
+삼항 연산자를 제외하고 오른쪽에만 공백 한 칸을 두어요.
+
+```swift
+// Preferred
+class MyViewController: UIViewController { /* ... */ }
+let dictionary: [String: String] = ["key": "value"]
+
+// Avoid
+class MyViewController:UIViewController { /* ... */ }
+```
+
+#### 삼항 연산자
+
+연산자 양옆에 공백 한 칸을 두어요.
+
+```swift
+// Preferred
+let dayString = day < 10 ? "0\(day)" : "\(day)"
+```
+
+#### 쉼표(`,`)
+
+오른쪽에만 공백 한 칸을 두어요.
+
+```swift
+// Preferred
+let array = ["A", "B", "C"]
+someFunction(name: "a", age: 15)
+```
+
+#### 연산자
+
+연산자 양옆에 공백 한 칸을 두어요.
+
+```swift
+// Preferred
+let answer = 1 + 2 / 3 % (4 * 5)
+```
+
+#### 리턴 타입(`->`)
+
+기호 양옆에 공백 한 칸을 두어요.
+
+```swift
+// Preferred
+func someFunc() -> String { /* ... */ }
+let completion: () -> Void
+```
+
+#### 한 줄 클로저
+
+중괄호 안쪽 앞뒤에 공백 한 칸을 두어요.
+
+```swift
+// Preferred
+numArray.filter { $0 % 2 == 0 }
+guard let self else { return }
+
+// Avoid
+numArray.filter {$0 % 2 == 0}
+guard let self else { return}
+```
+
+### 줄 바꿈
+
+#### 함수
+
+```swift
+// 매개변수 1개: 한 줄
+func updateColor(_ color: Color) {
+    // ...
+}
+
+// 매개변수 2개 이상: 줄 바꿈
+private func updateInfo(
+    name: String,
+    email: String,
+    age: Int
+) {
+    // ...
+}
+```
+
+#### `guard let self`
+
+```swift
+// Preferred: 한 줄
+guard let self else { return }
+
+// Avoid
+guard let self else {
+    return
+}
+```
+
+#### 여는 중괄호
+
+1TBS 스타일로 선언과 같은 줄에 열어요.
+
+```swift
+// Preferred
+func someMethod() {
+    // ...
+}
+
+// Avoid
+func someMethod()
+{
+    // ...
+}
+```
+
+### 소괄호
+
+불필요한 소괄호는 생략해요.
+
+```swift
+// Preferred
+if count > 0 { /* ... */ }
+switch type { /* ... */ }
+
+// Avoid
+if (count > 0) { /* ... */ }
+switch (type) { /* ... */ }
+```
+
+---
+
+## 네이밍
+
+### 표기법
+
+| 표기법 | 적용 대상 |
+| --- | --- |
+| **UpperCamelCase** | 클래스, 구조체, 열거형, 프로토콜, Xcode 생성 리소스 파일명 |
+| **lowerCamelCase** | 변수, 상수, 함수, enum case, 외부 리소스 파일명 |
+
+```swift
+// UpperCamelCase
+class MyViewController { /* ... */ }
+struct MyModel { /* ... */ }
+enum SomeEnum { /* ... */ }
+
+// lowerCamelCase
+var myVariable = 0
+func someFunc() { /* ... */ }
+case firstCase
+```
+
+### 명명법
+
+#### 액션 함수
+
+주어 + 동사 + 목적어 순으로 적어요. 동작 이전은 `will`, 동작 이후는 `did`를 사용해요.
+
+```swift
+// Preferred
+func backButtonDidTap()
+
+// Avoid
+func pop()
+func clickBack()
+```
+
+#### API 함수
+
+HTTP 메서드에 따라 `get`, `post`, `put`, `delete`, `patch` 접두사를 사용해요.
+
+```swift
+// Preferred
+func getAccessToken()
+func patchShippingAddress()
+
+// Avoid
+func requestAccessToken()
+func fetchAccessToken()
+```
+
+#### 약어
+
+약어는 대문자로 적어요. 이름의 첫 글자로 시작하면 소문자를 사용해요.
+
+```swift
+// Preferred
+productID, urlString, homeVC
+
+// Avoid
+productId, URLString, homevc
+```
+
+#### 명확한 이름
+
+이름이 길어지더라도 의미를 완전하게 드러내요.
+
+```swift
+// Preferred
+RoundAnimationButton, personImageView, titleLabel
+
+// Avoid
+CustomButton, personImage, title
+```
+
+#### 프로토콜
+
+설명형은 명사를 사용해요. 기능형은 `able`, `ible`, `ing`로 끝나게 적어요.
+
+```swift
+// Preferred
+ImagePresentable, NotificationUIProtocol
+
+// Avoid
+ImagePresent, NotificationUIType
+```
+
+---
+
+## 코드 스타일
+
+### 타입 추론
+
+가능한 경우 타입 추론을 사용해요.
+
+```swift
+// Preferred
+view.backgroundColor = .red
+let view = UIView(frame: .zero)
+
+// Avoid
+view.backgroundColor = UIColor.red
+UIView(frame: CGRect.zero)
+```
+
+### 연산 프로퍼티와 함수
+
+다음 조건을 모두 만족하면 함수 대신 연산 프로퍼티를 사용해요.
+
+- 매개변수가 없어요.
+- 부작용(side effect)이 없어요.
+- O(1) 복잡도로 계산해요.
+
+```swift
+// Preferred
+var hasValidSession: Bool {
+    // 단순 비교 연산
+}
+
+// Avoid
+func hasValidSession() -> Bool { /* ... */ }
+```
+
+### `self` 사용
+
+사용할 수 있는 모든 곳에서 `self`를 사용해요.
+
+```swift
+// Preferred
+self.name = name
+
+// Avoid
+name = name
+```
+
+### 튜플 값 네이밍
+
+```swift
+// Preferred
+func someFunc() -> (x: Int, y: Int)
+
+// Avoid
+func someFunc() -> (Int, Int)
+```
+
+### 배열과 딕셔너리
+
+제네릭 축약 표기를 사용해요.
+
+```swift
+// Preferred
+var stringArray: [String]?
+var dictionary: [String: Int]
+
+// Avoid
+var stringArray: Array<String>?
+```
+
+### `final` 사용
+
+상속할 필요가 없으면 `final`을 적용해요.
+
+```swift
+// Preferred
+final class SomeClass: NSObject
+
+// Avoid
+class SomeClass: NSObject
+```
+
+### 프로토콜 채택 분리
+
+`extension`과 `// MARK:`로 역할별 구현을 분리해요.
+
+```swift
+// Preferred
+extension HomeViewController: UITableViewDataSource { /* ... */ }
+
+// Avoid
+class HomeViewController: UIViewController, UITableViewDataSource, UITableViewDelegate
+```
+
+### `switch-case`
+
+- 새 case를 추가했을 때 누락을 발견할 수 있도록 `default`를 지양해요.
+- 여러 case를 한 줄에 나열하지 않아요.
+- 각 case 사이에 빈 줄 하나를 두어요.
+
+```swift
+// Preferred
+switch self {
+case .first:
+    return "first"
+
+case .second:
+    return "second"
+}
+
+// Avoid
+case blue, red, yellow
+```
+
+### `guard` 문
+
+```swift
+// 조건 1개: 한 줄
+guard let name = name else { return }
+
+// 조건 2개 이상: 각 조건 줄 바꿈
+guard
+    let name = UserDefaults.standard.string(forKey: "name"),
+    let email = UserDefaults.standard.string(forKey: "email")
+else {
+    return
+}
+```
+
+### 접근 제어
+
+- `fileprivate`와 `private`를 적극적으로 사용해요.
+- `internal`, `public`, `open`은 특별한 이유가 없으면 생략해요.
+
+```swift
+// Preferred: internal 생략
+func updatePosition()
+
+// Avoid
+internal func updatePosition()
+```
+
+#### `private(set)`
+
+```swift
+// Preferred
+private(set) var isPendingDelete = false
+
+// Avoid
+private var _isPendingDelete = false
+var isPendingDelete: Bool { self._isPendingDelete }
+```
+
+#### `private extension` 금지
+
+`private extension`을 사용하지 않고 각 함수에 `private`를 명시해요.
+
+```swift
+// Preferred
+extension DefaultRepository {
+
+    private func process() {
+        // ...
+    }
+
+    private func validate() {
+        // ...
+    }
+}
+
+// Avoid
+private extension DefaultRepository {
+
+    func process() {
+        // ...
+    }
+
+    func validate() {
+        // ...
+    }
+}
+```
+
+### 주석
+
+코드 옆에 주석을 적을 때는 코드와 주석 사이에 공백 한 칸만 두어요.
+
+```swift
+// Preferred
+let name = "Sample" // 이름
+
+// Avoid
+let name = "Sample"   // 이름
+```
+
+---
+
+## MARK 주석
+
+### 외부 MARK
+
+최상위 선언 사이에 있는 MARK는 위로 세 줄, 아래로 한 줄을 띄어요. `import` 바로 아래의 첫 MARK는 위로 한 줄만 띄어요.
+
+```swift
+final class HomeViewController: UIViewController { /* ... */ }
+
+
+
+// MARK: - UITableViewDataSource
+
+extension HomeViewController: UITableViewDataSource { /* ... */ }
+
+
+
+// MARK: - UITableViewDelegate
+
+extension HomeViewController: UITableViewDelegate { /* ... */ }
+```
+
+### 내부 MARK
+
+클래스, 구조체, 열거형 안의 첫 MARK는 여는 중괄호 다음에 한 줄을 띄어요. 이후 MARK는 이전 섹션과 세 줄을 띄어요.
+
+```swift
+final class MyViewController: UIViewController {
+
+    // MARK: - Property
+
+    private var name = ""
+
+
+
+    // MARK: - Life Cycle
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+    }
+
+
+
+    // MARK: - Private
+
+    private func setupUI() {
+        // ...
+    }
+}
+```
+
+### 표준 MARK 섹션명
+
+| 섹션명 | 용도 |
+| --- | --- |
+| `Property` | 변수와 상수를 정의해요. |
+| `Life Cycle` | `init`, `deinit`, `viewDidLoad` 등을 두어요. |
+| `Interface` | 외부에서 호출할 수 있는 메서드와 Binder를 두어요. |
+| `Private` | 내부에서만 사용하는 `private` 메서드를 두어요. |
+| `UI` | View의 `setAttribute()`, `setConstraint()`를 두어요. |
+| `Input / Output` | ViewModel의 Input·Output 구조체를 두어요. |
+| `Transform` | ViewModel의 `transform` 메서드를 두어요. |
+
+---
+
+## 관련 문서
+
+- [아키텍처](../architecture/architecture.md)
+- [DI Container](../architecture/dicontainer.md)
+- [테스트](testing.md)
