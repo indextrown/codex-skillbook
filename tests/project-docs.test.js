@@ -154,6 +154,10 @@ test('--include gitflow adds the optional document', async (t) => {
   const gitflow = fs.readFileSync(path.join(root, 'docs', 'development', 'gitflow.md'), 'utf8');
   assert.match(gitflow, /확인 필요/u);
   assert.match(gitflow, /## 한 작업을 PR로 보내는 흐름/u);
+  assert.match(gitflow, /작업 브랜치 생성 → 변경·검증 → 커밋할 파일 선택 → 커밋 → push → PR 생성·리뷰/u);
+  assert.match(gitflow, /### 2\. 작업 브랜치를 만들어요/u);
+  assert.match(gitflow, /### 4\. 커밋할 파일을 선택하고 확인해요/u);
+  assert.match(gitflow, /커밋하기 직전에 이번 커밋에 포함할 파일만 stage해요/u);
   assert.match(gitflow, /git diff --staged/u);
   assert.match(gitflow, /### 5\. 커밋 규칙을 확인하고 커밋해요/u);
   assert.match(gitflow, /git log -20 --pretty=format/u);
@@ -162,6 +166,9 @@ test('--include gitflow adds the optional document', async (t) => {
   assert.match(gitflow, /\[docs\] Git 작업 흐름 정리/u);
   assert.match(gitflow, /git commit -m "\[docs\] Git 작업 흐름 정리"/u);
   assert.match(gitflow, /git log -1 --oneline/u);
+  assert.match(gitflow, /### 6\. 커밋을 원격 저장소에 push해요/u);
+  assert.match(gitflow, /git push -u origin feature\/profile-refresh/u);
+  assert.match(gitflow, /### 7\. PR을 만들고 리뷰를 요청해요/u);
   assert.doesNotMatch(gitflow, /(?:feat|fix|refactor|test|docs|chore): /u);
   assert.match(gitflow, /#### PR 제목을 작성해요/u);
   assert.match(gitflow, /\[docs\] Git 작업 흐름을 개선한다/u);
