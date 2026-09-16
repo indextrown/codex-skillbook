@@ -17,16 +17,17 @@ const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED', 'SKIP_RET
 
 const USAGE = `사용법:
   project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
-                              [--include gitflow] [--include rxswift]
                               [--dry-run | --apply]
 
 옵션:
   --target        대상 프로젝트의 절대 경로 (기본값: 현재 디렉터리)
   --project-name  문서에 표시할 프로젝트 이름 (기본값: 대상 폴더 이름)
-  --include       선택 문서 추가 (gitflow: 1개, rxswift: 3개; 여러 번 지정 가능)
   --dry-run       변경 예정 파일만 표시하고 쓰지 않음
   --apply         대화형 확인 없이 적용
   --help          사용법 표시
+
+현재 키트의 문서는 모두 기본 생성해요.
+이전 명령의 --include gitflow과 --include rxswift도 호환을 위해 허용해요.
 `;
 
 function parseArguments(args) {
@@ -61,10 +62,10 @@ function parseArguments(args) {
       if (flag === '--project-name') options.projectName = value;
       if (flag === '--include') {
         if (!SUPPORTED_INCLUDES.has(value)) {
-          throw new Error(`지원하지 않는 선택 문서예요: ${value}`);
+          throw new Error(`지원하지 않는 --include 값이에요: ${value}`);
         }
         if (options.include.has(value)) {
-          throw new Error(`선택 문서를 중복 지정했어요: ${value}`);
+          throw new Error(`--include 값을 중복 지정했어요: ${value}`);
         }
         options.include.add(value);
       }
@@ -177,7 +178,7 @@ function renderTemplate(source, projectName) {
   return Buffer.from(rendered, 'utf8');
 }
 
-async function loadEntries(projectName, include) {
+async function loadEntries(projectName) {
   const manifest = JSON.parse(await fs.readFile(path.join(KIT_DIRECTORY, 'kit.json'), 'utf8'));
   if (manifest.name !== KIT_NAME || !Array.isArray(manifest.files)
       || (manifest.retiredFiles !== undefined && !Array.isArray(manifest.retiredFiles))) {
@@ -195,10 +196,9 @@ async function loadEntries(projectName, include) {
     }
     configuredTargets.add(item.target);
     knownTargets.add(item.target);
-    if (item.include && !SUPPORTED_INCLUDES.has(item.include)) {
-      throw new Error(`알 수 없는 선택 문서예요: ${item.include}`);
+    if (item.include) {
+      throw new Error(`현재 문서는 모두 필수이므로 include 설정을 사용할 수 없어요: ${item.target}`);
     }
-    if (item.include && !include.has(item.include)) continue;
 
     const templatePath = path.join(kitRoot, ...sourceSegments);
     const resolvedTemplate = await fs.realpath(templatePath);
@@ -431,8 +431,11 @@ async function writeManifest(root, manifest, files) {
   await writeAtomically(manifest.destination, content);
 }
 
-function printPlan(io, root, entries) {
+function printPlan(io, root, entries, legacyIncludes) {
   io.stdout.write(`대상 프로젝트: ${root}\n`);
+  if (legacyIncludes.size > 0) {
+    io.stdout.write('안내: --include 옵션은 더 이상 필요하지 않아요. 현재 문서는 모두 기본 생성해요.\n');
+  }
   for (const entry of entries) {
     io.stdout.write(`${entry.status.padEnd(16)} ${entry.target}\n`);
   }
@@ -458,7 +461,7 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const root = await resolveTarget(options.target);
     const projectName = markdownText(options.projectName || path.basename(root));
     const manifest = await loadManifest(root);
-    const { entries, knownTargets, retiredEntries } = await loadEntries(projectName, options.include);
+    const { entries, knownTargets, retiredEntries } = await loadEntries(projectName);
     const plan = [];
     for (const entry of entries) {
       plan.push(await inspectEntry(root, entry, manifest.files.get(entry.target)));
@@ -477,7 +480,7 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
       );
       if (retiredEntry) plan.push(retiredEntry);
     }
-    printPlan(io, root, plan);
+    printPlan(io, root, plan, options.include);
     if (options.dryRun) return 0;
     if (!plan.some((entry) => ACTIONABLE_STATUSES.has(entry.status))) {
       io.stdout.write('적용할 변경이 없어요.\n');
