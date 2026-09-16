@@ -19,18 +19,15 @@
     },
     {
       "template": "docs/architecture/rxswift.md.tmpl",
-      "target": "docs/architecture/rxswift.md",
-      "include": "rxswift"
+      "target": "docs/architecture/rxswift.md"
     },
     {
       "template": "docs/architecture/rxswift-binding-policy.md.tmpl",
-      "target": "docs/architecture/rxswift-binding-policy.md",
-      "include": "rxswift"
+      "target": "docs/architecture/rxswift-binding-policy.md"
     },
     {
       "template": "docs/architecture/rxswift-input-output.md.tmpl",
-      "target": "docs/architecture/rxswift-input-output.md",
-      "include": "rxswift"
+      "target": "docs/architecture/rxswift-input-output.md"
     },
     {
       "template": "docs/development/testing.md.tmpl",
@@ -42,8 +39,7 @@
     },
     {
       "template": "docs/development/gitflow.md.tmpl",
-      "target": "docs/development/gitflow.md",
-      "include": "gitflow"
+      "target": "docs/development/gitflow.md"
     }
   ],
   "retiredFiles": [

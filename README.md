@@ -94,7 +94,7 @@ cd /absolute/path/MyUIKitApp
 npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit
 ```
 
-명령은 파일별 변경 사항을 먼저 보여주고 `적용할까요? [y/N]`를 물어요. RxSwift·RxCocoa 의존성을 찾지 못한 프로젝트에서는 다음 파일을 만들어요.
+명령은 파일별 변경 사항을 먼저 보여주고 `적용할까요? [y/N]`를 물어요. 승인하면 현재 문서 키트의 문서 10개를 모두 만들어요.
 
 ```text
 MyUIKitApp/
@@ -105,34 +105,21 @@ MyUIKitApp/
 └── docs/
     ├── architecture/
     │   ├── architecture.md           ← UIKit 아키텍처 검토 예시
-    │   └── dicontainer.md            ← DI 객체 생성과 공유 기준
+    │   ├── dicontainer.md            ← DI 객체 생성과 공유 기준
+    │   ├── rxswift.md                ← RxSwift·RxCocoa 타입과 연산자
+    │   ├── rxswift-binding-policy.md ← Rx 바인딩 정책 검토안
+    │   └── rxswift-input-output.md   ← ViewModel Input·Output 패턴
     └── development/
-        ├── swiftstyle.md              ← Swift 코드 스타일 검토안
-        └── testing.md                 ← 테스트 가이드
+        ├── gitflow.md                ← 브랜치·커밋·PR 작업 흐름
+        ├── swiftstyle.md             ← Swift 코드 스타일 검토안
+        └── testing.md                ← 테스트 가이드
 ```
 
 `AGENTS.md`에서 작업에 필요한 문서와 적용 기준을 바로 찾아갈 수 있어요. `CLAUDE.md`는 [Claude Code의 파일 가져오기 문법](https://code.claude.com/docs/en/memory#agentsmd)인 `@AGENTS.md`를 사용해 같은 작업 기준을 불러와요. 공통 규칙을 두 파일에 중복해서 관리하지 않아요.
 
-아키텍처와 DI Container 문서는 프로젝트를 자동 분석한 결과가 아니에요. Swift 스타일 가이드도 범용 검토안이므로 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
+생성 문서는 모두 필수 문서예요. 아키텍처, DI Container, RxSwift, Git 작업 흐름과 Swift 스타일 문서는 프로젝트를 자동 분석해 확정한 규칙이 아니라 검토할 초안이에요. 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
 
-### RxSwift 문서 자동 감지와 선택 문서 추가
-
-기본 명령은 `Package.resolved`, `project.pbxproj`, `Podfile.lock` 같은 의존성 선언에서 RxSwift 또는 RxCocoa를 찾아요. 사용 중인 것으로 확인되면 `rxswift.md`, `rxswift-binding-policy.md`, `rxswift-input-output.md`를 자동으로 추가하고, 어떤 파일에서 감지했는지 실행 결과에 표시해요. Swift 소스 전체를 분석하지 않으므로 의존성을 확인하지 못했다면 `--include rxswift`로 직접 추가할 수 있어요.
-
-Git 작업 흐름 문서는 프로젝트마다 정책이 달라서 자동으로 추가하지 않아요. 필요한 프로젝트에서만 선택 옵션을 사용해요.
-
-```bash
-# Git 작업 흐름 문서 한 개를 추가해요.
-npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --include gitflow
-
-# 자동 감지되지 않은 RxSwift 문서 세 개를 직접 추가해요.
-npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --include rxswift
-
-# 두 문서 묶음을 함께 추가해요.
-npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --include gitflow --include rxswift
-```
-
-`gitflow`은 커밋 규칙과 PR 제목·본문 작성 흐름을 담은 `docs/development/gitflow.md`를 만들어요. `rxswift`는 자동 감지 여부와 관계없이 `docs/architecture/` 아래에 RxSwift 문서 세 개를 포함해요. 실행 결과는 제외한 선택 문서와 해당 `--include` 옵션도 함께 안내해요.
+이전 명령에 있던 `--include gitflow`과 `--include rxswift`는 호환을 위해 계속 허용하지만, 이제 모든 문서를 기본 생성하므로 지정하지 않아도 돼요.
 
 ### 쓰기 전에 확인하기
 
