@@ -107,12 +107,13 @@ MyUIKitApp/
     │   ├── architecture.md           ← UIKit 아키텍처 검토 예시
     │   └── dicontainer.md            ← DI 객체 생성과 공유 기준
     └── development/
-        └── testing.md                ← 테스트 가이드
+        ├── swiftstyle.md              ← Swift 코드 스타일 검토안
+        └── testing.md                 ← 테스트 가이드
 ```
 
 `AGENTS.md`에서 작업에 필요한 문서와 적용 기준을 바로 찾아갈 수 있어요. `CLAUDE.md`는 [Claude Code의 파일 가져오기 문법](https://code.claude.com/docs/en/memory#agentsmd)인 `@AGENTS.md`를 사용해 같은 작업 기준을 불러와요. 공통 규칙을 두 파일에 중복해서 관리하지 않아요.
 
-아키텍처와 DI Container 문서는 프로젝트를 자동 분석한 결과가 아니에요. 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
+아키텍처와 DI Container 문서는 프로젝트를 자동 분석한 결과가 아니에요. Swift 스타일 가이드도 범용 검토안이므로 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
 
 ### 필요한 문서만 추가하기
 

@@ -36,7 +36,7 @@ async function invoke(args, { tty = false, confirm = false } = {}) {
   return { code, output, errors };
 }
 
-test('--dry-run previews the five default files without changing the project', async (t) => {
+test('--dry-run previews the six default files without changing the project', async (t) => {
   const root = project(t);
   const result = await invoke(['init', 'ios-uikit', '--target', root, '--dry-run']);
 
@@ -45,6 +45,7 @@ test('--dry-run previews the five default files without changing the project', a
   assert.match(result.output, /CREATE\s+CLAUDE\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/architecture\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/dicontainer\.md/u);
+  assert.match(result.output, /CREATE\s+docs\/development\/swiftstyle\.md/u);
   assert.match(result.output, /CREATE\s+docs\/development\/testing\.md/u);
   assert.doesNotMatch(result.output, /Root\.md/u);
   assert.doesNotMatch(result.output, /gitflow\.md/u);
@@ -84,13 +85,16 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'architecture')).sort(), [
     'architecture.md', 'dicontainer.md',
   ]);
-  assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')), ['testing.md']);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')).sort(), [
+    'swiftstyle.md', 'testing.md',
+  ]);
   const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
   assert.match(agents, /MyUIKitApp/u);
   assert.match(agents, /## 작업 전에 확인할 문서/u);
   assert.match(agents, /\| 확인할 내용 \| 문서 \| 확인 기준 \|/u);
   assert.match(agents, /\[아키텍처\]\(docs\/architecture\/architecture\.md\)/u);
   assert.match(agents, /\[DI Container\]\(docs\/architecture\/dicontainer\.md\)/u);
+  assert.match(agents, /\[Swift 스타일\]\(docs\/development\/swiftstyle\.md\)/u);
   assert.match(agents, /\[테스트\]\(docs\/development\/testing\.md\)/u);
   assert.doesNotMatch(agents, /Root\.md/u);
   assert.match(agents, /## 작업 중 판단 기준/u);
@@ -136,6 +140,18 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.match(diContainer, /### ViewModel Factory 메서드/u);
   assert.match(diContainer, /func makeSplashViewModel\(\n\s+_ actions: SplashViewActions/u);
   assert.doesNotMatch(diContainer, /Navi 3\.0|이유업|다른 UIKit 프로젝트/u);
+  const swiftStyle = fs.readFileSync(path.join(root, 'docs', 'development', 'swiftstyle.md'), 'utf8');
+  assert.match(swiftStyle, /# MyUIKitApp Swift 스타일 가이드/u);
+  assert.match(swiftStyle, /## 파일 헤더/u);
+  assert.match(swiftStyle, /## 코드 포맷팅/u);
+  assert.match(swiftStyle, /## 네이밍/u);
+  assert.match(swiftStyle, /## 코드 스타일/u);
+  assert.match(swiftStyle, /## MARK 주석/u);
+  assert.match(swiftStyle, /Created by Developer/u);
+  assert.match(swiftStyle, /UIView\.animate\(/u);
+  assert.match(swiftStyle, /`private extension` 금지/u);
+  assert.match(swiftStyle, /\[아키텍처\]\(\.\.\/architecture\/architecture\.md\)/u);
+  assert.doesNotMatch(swiftStyle, /\{\{PROJECT_NAME\}\}|Navi 3\.0|이유업|UPs|_DevGuide_Index/u);
   const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
   assert.equal(manifest.kit, 'ios-uikit');
   assert.equal(Object.hasOwn(manifest, 'version'), false);
@@ -144,10 +160,15 @@ test('interactive confirmation creates only the documented default tree', async 
     'CLAUDE.md',
     'docs/architecture/architecture.md',
     'docs/architecture/dicontainer.md',
+    'docs/development/swiftstyle.md',
     'docs/development/testing.md',
   ].sort((left, right) => left.localeCompare(right)));
   assert.equal(manifest.files['AGENTS.md'], sha256(fs.readFileSync(path.join(root, 'AGENTS.md'))));
   assert.equal(manifest.files['CLAUDE.md'], sha256(fs.readFileSync(path.join(root, 'CLAUDE.md'))));
+  assert.equal(
+    manifest.files['docs/development/swiftstyle.md'],
+    sha256(fs.readFileSync(path.join(root, 'docs', 'development', 'swiftstyle.md'))),
+  );
   assert.equal(fs.existsSync(path.join(root, 'package.json')), false);
   assert.equal(fs.existsSync(path.join(root, 'package-lock.json')), false);
 });
@@ -157,7 +178,9 @@ test('--include gitflow adds the optional document', async (t) => {
   const result = await invoke(['init', 'ios-uikit', '--target', root, '--include', 'gitflow', '--apply']);
 
   assert.equal(result.code, 0, result.errors);
-  assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')).sort(), ['gitflow.md', 'testing.md']);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')).sort(), [
+    'gitflow.md', 'swiftstyle.md', 'testing.md',
+  ]);
   const gitflow = fs.readFileSync(path.join(root, 'docs', 'development', 'gitflow.md'), 'utf8');
   assert.match(gitflow, /확인 필요/u);
   assert.match(gitflow, /## 한 작업을 PR로 보내는 흐름/u);
@@ -309,7 +332,7 @@ test('re-running the command leaves generated files unchanged', async (t) => {
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 5);
+  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 6);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
 });
 
@@ -372,6 +395,28 @@ test('re-running an older managed kit adds the new CLAUDE.md bridge', async (t) 
   assert.match(fs.readFileSync(claudePath, 'utf8'), /^@AGENTS\.md$/mu);
   const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
   assert.equal(updatedManifest.files['CLAUDE.md'], sha256(fs.readFileSync(claudePath)));
+});
+
+test('re-running an older managed kit adds the new Swift style guide', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const swiftStylePath = path.join(root, 'docs', 'development', 'swiftstyle.md');
+  fs.rmSync(swiftStylePath);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  delete manifest.files['docs/development/swiftstyle.md'];
+  fs.writeFileSync(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /CREATE\s+docs\/development\/swiftstyle\.md/u);
+  assert.match(fs.readFileSync(swiftStylePath, 'utf8'), /## MARK 주석/u);
+  const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(
+    updatedManifest.files['docs/development/swiftstyle.md'],
+    sha256(fs.readFileSync(swiftStylePath)),
+  );
 });
 
 test('re-running deletes a retired generated document that was not edited', async (t) => {
@@ -483,7 +528,7 @@ test('a legacy file that already matches the template can be tracked safely', as
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.match(result.output, /생성 0개, 갱신 0개, 삭제 0개, 추적 5개, 관리 종료 0개, 사용자 문서 보존 0개/u);
+  assert.match(result.output, /생성 0개, 갱신 0개, 삭제 0개, 추적 6개, 관리 종료 0개, 사용자 문서 보존 0개/u);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
   assert.equal(fs.existsSync(manifestPath(root)), true);
 });
@@ -510,7 +555,7 @@ test('a differing existing file is preserved while missing files are created', a
 
   assert.equal(result.code, 2);
   assert.match(result.output, /SKIP_UNTRACKED\s+AGENTS\.md/u);
-  assert.match(result.output, /생성 4개, 갱신 0개, 삭제 0개, 추적 0개, 관리 종료 0개, 사용자 문서 보존 1개/u);
+  assert.match(result.output, /생성 5개, 갱신 0개, 삭제 0개, 추적 0개, 관리 종료 0개, 사용자 문서 보존 1개/u);
   assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), '팀에서 작성한 규칙\n');
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'testing.md')), true);
 });
@@ -648,6 +693,7 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/rxswift-binding-policy.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/rxswift-input-output.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/development/gitflow.md.tmpl'));
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/development/swiftstyle.md.tmpl'));
   assert.equal(packagedPaths.some((file) => file.startsWith('skills/') || file.startsWith('docs/')), false);
 
   const archive = JSON.parse(execFileSync('npm', ['pack', '--pack-destination', packDirectory, '--json'], {
@@ -666,6 +712,7 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   assert.equal(result.status, 0, result.stderr);
   assert.equal(fs.existsSync(path.join(target, 'AGENTS.md')), true);
   assert.equal(fs.existsSync(path.join(target, 'CLAUDE.md')), true);
+  assert.equal(fs.existsSync(path.join(target, 'docs', 'development', 'swiftstyle.md')), true);
   assert.equal(fs.existsSync(manifestPath(target)), true);
   assert.equal(fs.readFileSync(appSource, 'utf8'), 'import UIKit\n');
   for (const [name, content] of before) {

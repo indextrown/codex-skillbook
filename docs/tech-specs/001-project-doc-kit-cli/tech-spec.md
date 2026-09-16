@@ -47,6 +47,7 @@ RxSwift를 채택한 프로젝트는 선택 옵션으로 타입·연산자, 바�
 - `CLAUDE.md`는 `AGENTS.md`를 불러와 Claude Code에서도 같은 공통 작업 기준을 사용해야 해요.
 - 아키텍처 문서에는 계층별 책임, 코드 의존성, 사용자 동작의 데이터 흐름과 기능 추가 순서를 실제 예시로 설명해야 해요.
 - DI Container 문서에는 객체 생성 방식, 공유 생명 주기, 사용처 주석, MARK 배치와 ViewModel Factory 규칙을 설명해야 해요.
+- Swift 스타일 문서에는 파일 헤더, 포맷팅, 네이밍, 코드 작성 방식과 MARK 주석 규칙을 프로젝트 검토안으로 제공해야 해요.
 - Git 흐름 선택 문서는 `[유형] 변경 내용` 형식의 커밋, GitHub CLI를 우선한 PR 생성, `-다`체 PR 제목과 본문 작성, 저장소 PR 템플릿 사용 순서를 간결하게 안내해야 해요.
 - RxSwift를 쓰는 프로젝트는 `--include rxswift` 한 번으로 서로 연결된 참고·정책 검토·Input/Output 문서 세 개를 추가할 수 있어야 해요.
 
@@ -82,6 +83,7 @@ project-doc-kits/ios-uikit/
     │   ├── rxswift-binding-policy.md.tmpl
     │   └── rxswift-input-output.md.tmpl
     └── development/
+        ├── swiftstyle.md.tmpl
         ├── testing.md.tmpl
         └── gitflow.md.tmpl
 └── retired/
@@ -90,7 +92,7 @@ project-doc-kits/ios-uikit/
 tests/project-docs.test.js
 ```
 
-`.tmpl`은 키트의 `AGENTS.md`와 `CLAUDE.md`가 이 저장소의 작업 지침으로 읽히지 않게 해요. `kit.json`은 템플릿, 대상 상대 경로, 기본·선택 여부를 선언해요. 기본 생성 대상은 `AGENTS.md`, `CLAUDE.md`, `docs/architecture/architecture.md`, `docs/architecture/dicontainer.md`, `docs/development/testing.md`예요. `docs/development/gitflow.md`는 `--include gitflow`을 지정한 경우에만 만들어요. `--include rxswift`는 `docs/architecture/` 아래 RxSwift 문서 세 개를 함께 만들어요. 두 선택 옵션을 함께 지정할 수 있어요.
+`.tmpl`은 키트의 `AGENTS.md`와 `CLAUDE.md`가 이 저장소의 작업 지침으로 읽히지 않게 해요. `kit.json`은 템플릿, 대상 상대 경로, 기본·선택 여부를 선언해요. 기본 생성 대상은 `AGENTS.md`, `CLAUDE.md`, `docs/architecture/architecture.md`, `docs/architecture/dicontainer.md`, `docs/development/swiftstyle.md`, `docs/development/testing.md`예요. `docs/development/gitflow.md`는 `--include gitflow`을 지정한 경우에만 만들어요. `--include rxswift`는 `docs/architecture/` 아래 RxSwift 문서 세 개를 함께 만들어요. 두 선택 옵션을 함께 지정할 수 있어요.
 
 `retiredFiles`와 `retired/` 템플릿은 더 이상 생성하지 않는 문서를 안전하게 정리하는 마이그레이션 정보예요. 대상 파일이 관리 목록에 없더라도 이전 생성 템플릿과 정확히 같으면 삭제할 수 있어요. 내용이 다르면 사용자가 만든 문서로 보고 건드리지 않아요.
 
@@ -140,7 +142,7 @@ MyUIKitApp/
 └── README.md
 ```
 
-적용 후에는 기존 앱 파일을 유지하면서 관리 파일 한 개와 문서 다섯 개가 추가돼요.
+적용 후에는 기존 앱 파일을 유지하면서 관리 파일 한 개와 문서 여섯 개가 추가돼요.
 
 ```text
 MyUIKitApp/
@@ -157,10 +159,11 @@ MyUIKitApp/
     │   ├── architecture.md           ← 새로 생성, 상세 설계 예시
     │   └── dicontainer.md            ← 새로 생성, DI 객체 생성과 공유 기준
     └── development/
-        └── testing.md               ← 새로 생성
+        ├── swiftstyle.md             ← 새로 생성, Swift 코드 스타일 검토안
+        └── testing.md                ← 새로 생성
 ```
 
-`--include gitflow`을 지정하면 `docs/development/gitflow.md`를 추가해요. `--include rxswift`를 지정하면 `docs/architecture/rxswift.md`, `rxswift-binding-policy.md`, `rxswift-input-output.md`를 추가해요. 두 옵션을 함께 쓰면 `architecture/`에는 기본 아키텍처·DI Container 문서와 RxSwift 문서 세 개가, `development/`에는 `testing.md`와 `gitflow.md`가 생겨요. `--dry-run`은 이 트리를 만들지 않고 파일별 예정 상태만 보여줘요.
+`--include gitflow`을 지정하면 `docs/development/gitflow.md`를 추가해요. `--include rxswift`를 지정하면 `docs/architecture/rxswift.md`, `rxswift-binding-policy.md`, `rxswift-input-output.md`를 추가해요. 두 옵션을 함께 쓰면 `architecture/`에는 기본 아키텍처·DI Container 문서와 RxSwift 문서 세 개가, `development/`에는 기본 Swift 스타일·테스트 문서와 선택 Git 작업 흐름 문서가 생겨요. `--dry-run`은 이 트리를 만들지 않고 파일별 예정 상태만 보여줘요.
 
 이미 `docs/decisions.md` 같은 팀 문서가 있으면 그대로 유지해요. 키트가 선언한 상대 경로만 비교하고, 나머지 `docs/` 내용은 읽거나 수정하지 않아요. 이전 CLI로 만든 문서에 관리 파일이 없어도 현재 템플릿과 완전히 같은 파일은 `TRACK`으로 등록할 수 있어요. 내용이 다르면 `SKIP_UNTRACKED`로 보존해요.
 
@@ -173,6 +176,8 @@ MyUIKitApp/
 `docs/architecture/architecture.md`는 App·Presentation·Domain·Data·Infrastructure의 역할과 경계를 구체적으로 설명해요. `Presentation → Domain ← Data → Infrastructure`라는 코드 의존성과 App의 구현체 조립을 설명해요. 가상의 프로필 새로고침에서 사용자 입력, UseCase, Repository 계약과 구현, 응답 변환, 화면 상태 갱신을 순서대로 따라가요. 기능 추가 체크리스트에는 어떤 계층을 언제 만들고 무엇을 검증할지 적어요. RxSwift 같은 라이브러리는 선택 가능한 구현 도구로만 언급해요. 이 설계와 경로는 대상 코드베이스의 검증된 사실이 아니므로 개발자가 실제 구조에 맞게 고쳐야 해요.
 
 `docs/architecture/dicontainer.md`는 `AppDIContainer`에서 호출할 때마다 새 객체를 만드는 Factory Method와 최초 접근 시 공유 객체를 만드는 `lazy var`를 비교해요. 각 의존성의 사용처 주석, Infrastructure → Domain → Presentation 순서의 MARK 배치와 Coordinator가 호출하는 ViewModel Factory 규칙을 예시로 보여줘요. 대상 프로젝트가 다른 이름이나 조립 방식을 쓰면 실제 구현에 맞게 고쳐야 해요.
+
+`docs/development/swiftstyle.md`는 파일 헤더, import 순서, 줄 바꿈과 공백, 네이밍, 타입 추론, 접근 제어와 MARK 배치 규칙을 예시와 함께 보여줘요. 특정 작성자나 프로젝트 버전을 기본값으로 확정하지 않고, 프로젝트 이름만 사용자 입력으로 치환해요. 생성 후 실제 코드와 팀 합의를 확인해 규칙을 확정해야 해요.
 
 `testing.md`에는 확인한 테스트 타깃과 실행 명령을 적을 자리를 둬요. 선택 문서인 `gitflow.md`는 규칙 확인, 기본 브랜치 최신화, 작업 브랜치 생성, 변경 확인, 관련 파일 stage, 커밋·push, PR과 병합 후 정리 순서만 안내해요. stash, 긴급 릴리스처럼 기본 PR 흐름과 직접 관련 없는 설명은 넣지 않아요.
 
@@ -188,7 +193,7 @@ CLI는 쓰기 전에 대상 루트를 확인하고, 키트의 모든 대상 경�
 
 로컬 패키지는 `npm pack --dry-run`으로 실행 파일과 키트만 포함하는지 확인해요. 테스트는 `--dry-run`의 무변경, 확인 거절, 기본·선택 파일, 사용자 수정 보존, 수정하지 않은 생성 문서 갱신, 관리 이력이 없는 문서 처리, 제외된 미수정 문서의 삭제와 수정 문서의 보존, 기존 `docs/`와의 공존, 경로·심볼릭 링크 거부와 `확인 필요` 표기를 검증해요. 기본 브랜치에 병합한 뒤에는 GitHub 저장소 주소로 임시 프로젝트에서 원격 실행을 확인해요. 이때 대상 프로젝트에 `package.json`, 잠금 파일이나 키트 저장소가 새로 생기지 않는지도 검사해요.
 
-Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어요. 현재 문서 구성은 로컬 패키징 테스트에서 확인했어요. `--dry-run`은 파일을 만들지 않고 기본 다섯 파일을 표시하고, `--apply`는 기본 다섯 파일을 만들어요. `gitflow`, `rxswift`, 두 옵션 동시 지정은 각각 6개, 8개, 9개 파일을 만들어요. 기본 브랜치에 병합한 뒤 같은 원격 실행을 다시 확인해요.
+Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어요. 현재 문서 구성은 로컬 패키징 테스트에서 확인했어요. `--dry-run`은 파일을 만들지 않고 기본 여섯 파일을 표시하고, `--apply`는 기본 여섯 파일을 만들어요. `gitflow`, `rxswift`, 두 옵션 동시 지정은 각각 7개, 9개, 10개 파일을 만들어요. 기본 브랜치에 병합한 뒤 같은 원격 실행을 다시 확인해요.
 
 ## 고려 사항
 
@@ -200,6 +205,7 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
 - 이전 키트가 만든 `docs/Root.md`는 새 설치에서 생성하지 않아요. 기존 프로젝트에서는 마지막 적용 뒤 수정되지 않은 파일을 `DELETE`로 삭제해요. 앞선 갱신으로 관리 기록이 이미 없어도 이전 생성 템플릿과 정확히 같으면 삭제해요. 사용자가 수정했거나 직접 만든 파일은 보존해요.
 - `AGENTS.md`는 실제 작업 지침이 돼요. 템플릿에 확인되지 않은 팀 정책을 넣지 않고, 생성 후 프로젝트 담당자의 검토가 필요하다고 표시해요. 아키텍처 예시도 현재 코드의 증거로 취급하지 않아요.
 - `CLAUDE.md`는 `AGENTS.md`를 그대로 가져와야 해요. 공통 규칙을 두 파일에 복제하면 나중에 내용이 달라질 수 있어요.
+- Swift 스타일 문서는 팀 정책을 확정하는 문서가 아니라 검토안이에요. 작성자 표기, 네이밍, `self`, 접근 제어와 MARK 간격은 실제 코드와 팀 합의를 확인한 뒤 적용해야 해요.
 - Git 흐름 문서는 팀 정책을 모르면 오해를 만들 수 있어 기본 구성에서는 선택 파일로 유지해요. RxSwift 문서 세 개도 라이브러리를 쓰지 않는 프로젝트에 적용하지 않도록 선택 파일로 유지해요. Driver 미사용과 별도 확장은 생성 대상의 확인된 규칙으로 단정하지 않아요.
 - PR 템플릿에 이슈 번호나 필수 체크 항목이 있어도 실행 권한을 뜻하지 않아요. 이슈와 PR 템플릿 파일은 사용자가 생성해 달라고 요청한 경우에만 만들어요.
 - 더 짧은 `npx @scope/project-docs` 명령이 필요해지면 npm 게시 권한과 패키지 이름을 별도로 결정해요. 현재 범위에는 포함하지 않아요.
@@ -213,7 +219,7 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
   - [x] 1-4. `AGENTS.md`를 공통 문서 진입점으로 사용하고 `CLAUDE.md`에서 가져오는 구성을 개발자가 검토하고 승인해요.
 - [x] 2. 실행 패키지와 UIKit 키트 구성
   - [x] 2-1. 루트 `package.json`에 단일 `bin`과 `files` 허용 목록을 설정하고 설치·빌드 스크립트가 없는지 확인해요.
-  - [x] 2-2. `kit.json`에 기본 다섯 파일과 선택 `gitflow.md`·RxSwift 문서 세 개의 대상 경로를 등록해요.
+  - [x] 2-2. `kit.json`에 기본 여섯 파일과 선택 `gitflow.md`·RxSwift 문서 세 개의 대상 경로를 등록해요.
   - [x] 2-3. `AGENTS.md.tmpl`, `CLAUDE.md.tmpl`과 문서 템플릿이 설계 예시와 대상 프로젝트의 확인된 사실을 구별하는지 검토해요.
 - [x] 3. 미리보기와 확인 흐름 구현
   - [x] 3-1. `init ios-uikit --dry-run`이 대상 절대 경로와 파일별 상태를 출력하고 디스크를 바꾸지 않는 테스트가 통과해요.
@@ -259,3 +265,8 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
   - [x] 10-1. `CLAUDE.md.tmpl`에서 `@AGENTS.md`를 가져와 공통 규칙을 중복하지 않아요.
   - [x] 10-2. 기본 생성과 기존 키트 갱신에서 `CLAUDE.md`를 추가해요.
   - [x] 10-3. 사용자가 작성한 기존 `CLAUDE.md`는 덮어쓰지 않는 회귀 테스트가 통과해요.
+- [x] 11. Swift 스타일 가이드 추가
+  - [x] 11-1. 파일 헤더, 포맷팅, 네이밍, 코드 스타일과 MARK 주석 규칙을 `swiftstyle.md.tmpl`에 정리해요.
+  - [x] 11-2. 특정 작성자·버전·외부 문서 이름은 제거하고 프로젝트 이름과 실제 생성 문서 링크를 사용해요.
+  - [x] 11-3. `kit.json`, `AGENTS.md`, README에서 Swift 스타일 문서를 기본 생성 대상으로 연결해요.
+  - [x] 11-4. 기본 생성, 이전 키트 갱신과 패키징 테스트에서 Swift 스타일 문서가 생성되는지 확인해요.

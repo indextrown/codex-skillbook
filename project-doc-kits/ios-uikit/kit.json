@@ -37,6 +37,10 @@
       "target": "docs/development/testing.md"
     },
     {
+      "template": "docs/development/swiftstyle.md.tmpl",
+      "target": "docs/development/swiftstyle.md"
+    },
+    {
       "template": "docs/development/gitflow.md.tmpl",
       "target": "docs/development/gitflow.md",
       "include": "gitflow"
