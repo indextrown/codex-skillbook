@@ -158,6 +158,8 @@ test('--include gitflow adds the optional document', async (t) => {
   assert.match(gitflow, /### 2\. 작업 브랜치를 만들어요/u);
   assert.match(gitflow, /### 4\. 커밋할 파일을 선택하고 확인해요/u);
   assert.match(gitflow, /커밋하기 직전에 이번 커밋에 포함할 파일만 stage해요/u);
+  assert.match(gitflow, /git add docs\/development\/gitflow\.md/u);
+  assert.doesNotMatch(gitflow, /git add --/u);
   assert.match(gitflow, /git diff --staged/u);
   assert.match(gitflow, /### 5\. 커밋 규칙을 확인하고 커밋해요/u);
   assert.match(gitflow, /git log -20 --pretty=format/u);

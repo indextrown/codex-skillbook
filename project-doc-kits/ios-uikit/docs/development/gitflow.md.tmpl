@@ -63,8 +63,13 @@ git diff
 파일 수정과 검증을 마친 뒤, 커밋하기 직전에 이번 커밋에 포함할 파일만 stage해요.
 
 ```bash
-git add -- docs/development/gitflow.md
+# 이번 커밋에 포함할 파일을 선택해요.
+git add docs/development/gitflow.md
+
+# 선택한 파일과 변경량을 요약해서 확인해요.
 git diff --staged --stat
+
+# 실제로 커밋될 내용을 자세히 확인해요.
 git diff --staged
 ```
 
