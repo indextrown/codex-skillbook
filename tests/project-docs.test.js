@@ -121,8 +121,11 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.match(architecture, /이 키트가 RxSwift 도입을 요구하지는 않아요/u);
   const diContainer = fs.readFileSync(path.join(root, 'docs', 'architecture', 'dicontainer.md'), 'utf8');
   assert.match(diContainer, /# MyUIKitApp iOS DI Container 패턴/u);
-  assert.match(diContainer, /\| `private func make\.\.\.\(\)`/u);
-  assert.match(diContainer, /\| `private lazy var`/u);
+  assert.match(diContainer, /\| `private let`/u);
+  assert.match(diContainer, /\| `private lazy var = Type\(\.\.\.\)`/u);
+  assert.match(diContainer, /\| `private lazy var = \{ \.\.\. \}\(\)`/u);
+  assert.match(diContainer, /\| `func make\.\.\.\(\)`/u);
+  assert.match(diContainer, /func makeProfileViewModel\(\n\s+userID: String/u);
   assert.match(diContainer, /### 사용처 주석 규칙/u);
   assert.match(diContainer, /Infrastructure → Domain → Presentation/u);
   assert.match(diContainer, /### ViewModel Factory 메서드/u);

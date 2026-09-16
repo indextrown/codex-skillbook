@@ -1,11 +1,11 @@
 ---
 title: iOS DI Container 패턴
-description: AppDIContainer의 객체 생성 방식, 공유 생명 주기, 사용처 주석과 MARK 배치 규칙을 설명해요.
+description: AppDIContainer의 네 가지 객체 생성 방식, 공유 생명 주기, 사용처 주석과 MARK 배치 규칙을 설명해요.
 ---
 
 # {{PROJECT_NAME}} iOS DI Container 패턴
 
-> `AppDIContainer`의 의존성 관리 패턴을 정리해요. Factory Method, `lazy` 공유 인스턴스, 사용처 주석과 MARK 카테고리 규칙을 다뤄요.
+> `AppDIContainer`의 의존성 관리 패턴을 정리해요. 즉시 생성, 지연 생성, 추가 설정이 있는 지연 생성, Factory Method와 MARK 카테고리 규칙을 다뤄요.
 
 ## AppDIContainer 패턴
 
@@ -15,27 +15,61 @@ description: AppDIContainer의 객체 생성 방식, 공유 생명 주기, 사�
 
 | 패턴 | 사용 시점 | 특징 |
 | --- | --- | --- |
-| `private func make...()` | 호출할 때마다 새 인스턴스가 필요해요. | 상태가 없거나 인스턴스 사이에 상태를 공유하지 않는 객체에 사용해요. |
-| `private lazy var` | 하나의 인스턴스를 만들어 공유해야 해요. | 상태가 있거나 여러 컴포넌트가 같은 상태를 참조하는 객체에 사용해요. |
+| `private let` | 컨테이너를 만들 때 객체가 바로 필요해요. | 생성 즉시 한 번 만들고 컨테이너가 유지되는 동안 공유해요. |
+| `private lazy var = Type(...)` | 객체를 처음 사용하는 시점까지 생성을 미뤄도 돼요. | 최초 접근 시 한 번 만들고 이후 같은 인스턴스를 공유해요. |
+| `private lazy var = { ... }()` | 지연 생성하면서 생성 뒤 추가 설정도 해야 해요. | 직접 초기화하는 `lazy var`와 생명 주기는 같고, 여러 단계의 초기화 과정을 담을 수 있어요. |
+| `func make...()` | 요청할 때마다 새 인스턴스가 필요해요. | 화면이나 ViewModel처럼 호출마다 독립된 상태를 가져야 하는 객체에 사용해요. |
 
 ```swift
 final class AppDIContainer {
-    // AppService
-    private func makeUserStorage() -> UserStorage {
-        return DefaultUserStorage()
-    }
+    // 1. let — AppDIContainer를 생성할 때 만들고 공유해요.
+
+    // APIClient
+    private let appConfiguration = AppConfiguration.current
 
     // ProfileRepository
-    // SettingsRepository
-    private lazy var appService: AppService = {
-        return AppService(
-            userStorage: self.makeUserStorage()
+    private let logger = AppLogger()
+
+    // 2. lazy var — 처음 필요할 때 만들고 공유해요.
+
+    // ProfileRepository
+    private lazy var apiClient: APIClient =
+        APIClient(
+            configuration: self.appConfiguration
         )
+
+    // 3. lazy var + 실행 클로저 — 처음 필요할 때 만들고 추가 설정한 뒤 공유해요.
+
+    // ProfileViewModel
+    private lazy var profileRepository: ProfileRepository = {
+        let repository = DefaultProfileRepository(
+            apiClient: self.apiClient
+        )
+
+        repository.logger = self.logger
+
+        return repository
     }()
+
+    // 4. make...() — 호출할 때마다 새로운 객체를 만들어요.
+
+    // ProfileFlowCoordinator
+    /// 프로필 화면에서 사용할 ViewModel을 만들어요.
+    ///
+    /// - Parameter userID: 조회할 사용자의 식별자예요.
+    /// - Returns: 새로 생성한 프로필 ViewModel이에요.
+    func makeProfileViewModel(
+        userID: String
+    ) -> ProfileViewModel {
+        return ProfileViewModel(
+            userID: userID,
+            repository: self.profileRepository
+        )
+    }
 }
 ```
 
-`lazy var`의 실행 클로저는 객체를 만든 뒤 추가 설정이 필요하거나 초기화 과정을 여러 줄로 나타낼 때 유용해요. 추가 설정이 없다면 실행 클로저 없이 생성자를 바로 대입해도 최초 접근 시 한 번만 생성된다는 점은 같아요.
+`let`은 컨테이너와 함께 객체를 바로 만들어요. 두 `lazy var` 방식은 모두 최초 접근 시 한 번만 객체를 만들고 공유해요. 실행 클로저는 객체를 만든 뒤 프로퍼티를 설정하거나 초기화 과정을 여러 줄로 나눌 때만 사용해요. `make...()`는 호출할 때마다 새 객체를 반환해요.
 
 ### 사용처 주석 규칙
 
