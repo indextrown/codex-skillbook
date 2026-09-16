@@ -103,12 +103,13 @@ MyUIKitApp/
 ├── AGENTS.md                         ← Codex 작업 지침
 └── docs/
     ├── architecture/
-    │   └── architecture.md           ← UIKit 아키텍처 검토 예시
+    │   ├── architecture.md           ← UIKit 아키텍처 검토 예시
+    │   └── dicontainer.md            ← DI 객체 생성과 공유 기준
     └── development/
         └── testing.md                ← 테스트 가이드
 ```
 
-`AGENTS.md`에서 작업에 필요한 문서와 적용 기준을 바로 찾아갈 수 있어요. 아키텍처 문서는 프로젝트를 자동 분석한 결과가 아니에요. 생성 후 실제 코드와 팀 규칙을 확인해 `확인 필요` 항목을 다듬어 주세요.
+`AGENTS.md`에서 작업에 필요한 문서와 적용 기준을 바로 찾아갈 수 있어요. 아키텍처와 DI Container 문서는 프로젝트를 자동 분석한 결과가 아니에요. 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
 
 ### 필요한 문서만 추가하기
 

@@ -1,0 +1,184 @@
+---
+title: iOS DI Container 패턴
+description: AppDIContainer의 네 가지 객체 생성 방식, 공유 생명 주기, 사용처 주석과 MARK 배치 규칙을 설명해요.
+---
+
+# {{PROJECT_NAME}} iOS DI Container 패턴
+
+> `AppDIContainer`의 의존성 관리 패턴을 정리해요. 즉시 생성, 지연 생성, 추가 설정이 있는 지연 생성, Factory Method와 MARK 카테고리 규칙을 다뤄요.
+
+## AppDIContainer 패턴
+
+`AppDIContainer`는 앱 전역의 의존성을 만들고 연결하는 중앙 컨테이너예요. 프로젝트가 다른 이름이나 조립 방식을 사용한다면 실제 구현에 맞게 이 문서를 고쳐요.
+
+### 인스턴스 생성 패턴
+
+| 패턴 | 사용 시점 | 특징 |
+| --- | --- | --- |
+| `private let` | 컨테이너를 만들 때 객체가 바로 필요해요. | 생성 즉시 한 번 만들고 컨테이너가 유지되는 동안 공유해요. |
+| `private lazy var = Type(...)` | 객체를 처음 사용하는 시점까지 생성을 미뤄도 돼요. | 최초 접근 시 한 번 만들고 이후 같은 인스턴스를 공유해요. |
+| `private lazy var = { ... }()` | 지연 생성하면서 생성 뒤 추가 설정도 해야 해요. | 직접 초기화하는 `lazy var`와 생명 주기는 같고, 여러 단계의 초기화 과정을 담을 수 있어요. |
+| `func make...()` | 요청할 때마다 새 인스턴스가 필요해요. | 화면이나 ViewModel처럼 호출마다 독립된 상태를 가져야 하는 객체에 사용해요. |
+
+```swift
+final class AppDIContainer {
+    // 1. let — AppDIContainer를 생성할 때 만들고 공유해요.
+
+    // APIClient
+    private let appConfiguration = AppConfiguration.current
+
+    // ProfileRepository
+    private let logger = AppLogger()
+
+    // 2. lazy var — 처음 필요할 때 만들고 공유해요.
+
+    // ProfileRepository
+    private lazy var apiClient: APIClient =
+        APIClient(
+            configuration: self.appConfiguration
+        )
+
+    // 3. lazy var + 실행 클로저 — 처음 필요할 때 만들고 추가 설정한 뒤 공유해요.
+
+    // ProfileViewModel
+    private lazy var profileRepository: ProfileRepository = {
+        let repository = DefaultProfileRepository(
+            apiClient: self.apiClient
+        )
+
+        repository.logger = self.logger
+
+        return repository
+    }()
+
+    // 4. make...() — 호출할 때마다 새로운 객체를 만들어요.
+
+    // ProfileFlowCoordinator
+    /// 프로필 화면에서 사용할 ViewModel을 만들어요.
+    ///
+    /// - Parameter userID: 조회할 사용자의 식별자예요.
+    /// - Returns: 새로 생성한 프로필 ViewModel이에요.
+    func makeProfileViewModel(
+        userID: String
+    ) -> ProfileViewModel {
+        return ProfileViewModel(
+            userID: userID,
+            repository: self.profileRepository
+        )
+    }
+}
+```
+
+`let`은 컨테이너와 함께 객체를 바로 만들어요. 두 `lazy var` 방식은 모두 최초 접근 시 한 번만 객체를 만들고 공유해요. 실행 클로저는 객체를 만든 뒤 프로퍼티를 설정하거나 초기화 과정을 여러 줄로 나눌 때만 사용해요. `make...()`는 호출할 때마다 새 객체를 반환해요.
+
+### 사용처 주석 규칙
+
+모든 프로퍼티와 메서드 위에는 해당 의존성을 사용하는 컴포넌트를 주석으로 적어요.
+
+```swift
+// SplashViewModel
+// MainViewModel
+private func makeCheckNetworkUseCase() -> CheckNetworkUseCase {
+    return DefaultCheckNetworkUseCase(
+        self.networkMonitorRepository
+    )
+}
+
+// MainViewModel
+// MyVesselViewModel
+// MyFleetViewModel
+// SettingViewModel
+private lazy var myFleetUseCase: MyFleetUseCase = {
+    return DefaultMyFleetUseCase(
+        repository: self.myFleetRepository
+    )
+}()
+```
+
+사용처 주석은 다음 작업에 활용해요.
+
+- 의존성을 사용하는 위치를 빠르게 추적해요.
+- `// (unused)` 표시가 있거나 사용처 주석이 없는 코드를 미사용 후보로 찾아요. 삭제하기 전에는 실제 참조를 다시 확인해요.
+- 코드를 삭제하거나 수정할 때 영향을 받는 범위를 확인해요.
+
+### MARK 카테고리 구분
+
+카테고리는 의존성 흐름에 따라 Infrastructure → Domain → Presentation 순서로 배치해요.
+
+```swift
+final class AppDIContainer {
+    // MARK: - Storage
+
+    // Storage dependencies
+
+    // MARK: - Service
+
+    // Service dependencies
+
+    // MARK: - Manager
+
+    // Manager dependencies
+
+    // MARK: - Repository
+
+    // Repository dependencies
+
+    // MARK: - UseCase
+
+    // UseCase dependencies
+
+    // MARK: - ViewModel
+
+    /// Splash 화면에서 사용할 ViewModel을 만들어요.
+    ///
+    /// - Parameter actions: Splash 화면에서 실행할 동작이에요.
+    /// - Returns: 새로 생성한 Splash ViewModel이에요.
+    func makeSplashViewModel(
+        _ actions: SplashViewActions
+    ) -> SplashViewModel {
+        return DefaultSplashViewModel(
+            actions: actions
+        )
+    }
+
+    /// Main 화면에서 사용할 ViewModel을 만들어요.
+    ///
+    /// - Parameter actions: Main 화면에서 실행할 동작이에요.
+    /// - Returns: 새로 생성한 Main ViewModel이에요.
+    func makeMainViewModel(
+        _ actions: MainViewModelActions
+    ) -> MainViewModel {
+        return DefaultMainViewModel(
+            actions: actions
+        )
+    }
+}
+```
+
+### ViewModel Factory 메서드
+
+ViewModel Factory 메서드는 `private`로 감추지 않고 `AppFlowCoordinator`에서 호출할 수 있게 선언해요.
+
+```swift
+// MARK: - ViewModel
+
+/// Splash 화면에서 사용할 ViewModel을 만들어요.
+///
+/// - Parameter actions: Splash 화면에서 실행할 동작이에요.
+/// - Returns: 새로 생성한 Splash ViewModel이에요.
+func makeSplashViewModel(
+    _ actions: SplashViewActions
+) -> SplashViewModel {
+    return DefaultSplashViewModel(
+        actions: actions,
+        startNetworkMonitoringUseCase: self.makeStartNetworkMonitoringUseCase(),
+        checkNetworkUseCase: self.makeCheckNetworkUseCase()
+    )
+}
+```
+
+## 관련 문서
+
+- [전체 아키텍처 개요](architecture.md)에서 계층과 의존성 방향을 확인해요.
+- [프로젝트 작업 안내](../../AGENTS.md)에서 문서 적용 기준을 확인해요.
+- 프로젝트에 Coordinator Flow 가이드나 ViewModel Actions 패턴 문서가 있다면 함께 확인해요.
