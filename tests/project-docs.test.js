@@ -47,6 +47,7 @@ test('--dry-run previews the six default files without changing the project', as
   assert.match(result.output, /CREATE\s+docs\/architecture\/dicontainer\.md/u);
   assert.match(result.output, /CREATE\s+docs\/development\/swiftstyle\.md/u);
   assert.match(result.output, /CREATE\s+docs\/development\/testing\.md/u);
+  assert.match(result.output, /선택 문서 제외: Git 작업 흐름 1개 \(`--include gitflow`\), RxSwift 3개 \(`--include rxswift`\)/u);
   assert.doesNotMatch(result.output, /Root\.md/u);
   assert.doesNotMatch(result.output, /gitflow\.md/u);
   assert.doesNotMatch(result.output, /rxswift\.md/u);
@@ -224,6 +225,7 @@ test('--include rxswift adds the three linked documents without project-specific
   const result = await invoke(['init', 'ios-uikit', '--target', root, '--include', 'rxswift', '--apply']);
 
   assert.equal(result.code, 0, result.errors);
+  assert.doesNotMatch(result.output, /RxSwift 3개 \(`--include rxswift`\)/u);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'architecture')).sort(), [
     'architecture.md', 'dicontainer.md', 'rxswift-binding-policy.md', 'rxswift-input-output.md', 'rxswift.md',
   ]);
@@ -249,6 +251,36 @@ test('--include rxswift adds the three linked documents without project-specific
       assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', match[1])), true, match[1]);
     }
   }
+});
+
+test('RxSwift dependency declarations automatically include the three linked documents', async (t) => {
+  const root = project(t);
+  const packageResolved = path.join(
+    root,
+    'MyUIKitApp.xcodeproj',
+    'project.xcworkspace',
+    'xcshareddata',
+    'swiftpm',
+    'Package.resolved',
+  );
+  fs.mkdirSync(path.dirname(packageResolved), { recursive: true });
+  fs.writeFileSync(packageResolved, JSON.stringify({
+    pins: [{ identity: 'rxswift', location: 'https://github.com/ReactiveX/RxSwift.git' }],
+  }));
+
+  const result = await invoke(['init', 'ios-uikit', '--target', root, '--apply']);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(
+    result.output,
+    /자동 포함: MyUIKitApp\.xcodeproj\/project\.xcworkspace\/xcshareddata\/swiftpm\/Package\.resolved에서 RxSwift 사용을 확인해 관련 문서 3개를 포함해요\./u,
+  );
+  assert.doesNotMatch(result.output, /RxSwift 3개 \(`--include rxswift`\)/u);
+  assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'rxswift.md')), true);
+  assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'rxswift-binding-policy.md')), true);
+  assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture', 'rxswift-input-output.md')), true);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(Object.hasOwn(manifest.files, 'docs/architecture/rxswift.md'), true);
 });
 
 test('multiple --include options can add both optional documents', async (t) => {

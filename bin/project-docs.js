@@ -12,6 +12,28 @@ const KIT_NAME = 'ios-uikit';
 const KIT_DIRECTORY = path.resolve(__dirname, '..', 'project-doc-kits', KIT_NAME);
 const MANIFEST_SEGMENTS = ['.project-docs', 'manifest.json'];
 const SUPPORTED_INCLUDES = new Set(['gitflow', 'rxswift']);
+const DEPENDENCY_FILE_NAMES = new Set([
+  'Cartfile',
+  'Cartfile.resolved',
+  'Dependencies.swift',
+  'Package.resolved',
+  'Package.swift',
+  'Podfile',
+  'Podfile.lock',
+  'Project.swift',
+  'project.pbxproj',
+]);
+const SKIPPED_DISCOVERY_DIRECTORIES = new Set([
+  '.build',
+  '.git',
+  '.swiftpm',
+  'DerivedData',
+  'Pods',
+  'build',
+  'node_modules',
+]);
+const MAX_DEPENDENCY_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_DISCOVERY_DEPTH = 6;
 const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'DELETE', 'RETIRED']);
 const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED', 'SKIP_RETIRED_MODIFIED']);
 
@@ -27,6 +49,9 @@ const USAGE = `사용법:
   --dry-run       변경 예정 파일만 표시하고 쓰지 않음
   --apply         대화형 확인 없이 적용
   --help          사용법 표시
+
+RxSwift 또는 RxCocoa가 의존성 선언에서 확인되면 관련 문서 3개를 자동으로 포함해요.
+자동 감지가 어려운 프로젝트에서는 --include rxswift를 사용해요.
 `;
 
 function parseArguments(args) {
@@ -115,6 +140,53 @@ async function resolveTarget(target) {
     throw new Error('파일 시스템 루트에는 문서 키트를 적용할 수 없어요.');
   }
   return root;
+}
+
+async function detectRxSwift(root) {
+  const directories = [{ directory: root, depth: 0 }];
+  while (directories.length > 0) {
+    const { directory, depth } = directories.shift();
+    let items;
+    try {
+      items = await fs.readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'EACCES') continue;
+      throw error;
+    }
+
+    for (const item of items) {
+      if (item.isSymbolicLink()) continue;
+      const candidate = path.join(directory, item.name);
+      if (item.isDirectory()) {
+        if (depth < MAX_DISCOVERY_DEPTH && !SKIPPED_DISCOVERY_DIRECTORIES.has(item.name)) {
+          directories.push({ directory: candidate, depth: depth + 1 });
+        }
+        continue;
+      }
+      if (!item.isFile() || !DEPENDENCY_FILE_NAMES.has(item.name)) continue;
+
+      let stats;
+      try {
+        stats = await fs.stat(candidate);
+      } catch (error) {
+        if (error.code === 'ENOENT' || error.code === 'EACCES') continue;
+        throw error;
+      }
+      if (stats.size > MAX_DEPENDENCY_FILE_SIZE) continue;
+
+      let content;
+      try {
+        content = await fs.readFile(candidate, 'utf8');
+      } catch (error) {
+        if (error.code === 'ENOENT' || error.code === 'EACCES') continue;
+        throw error;
+      }
+      if (/\bRxSwift\b|\bRxCocoa\b|ReactiveX\/RxSwift/iu.test(content)) {
+        return path.relative(root, candidate).split(path.sep).join('/');
+      }
+    }
+  }
+  return null;
 }
 
 function contentHash(content) {
@@ -431,8 +503,17 @@ async function writeManifest(root, manifest, files) {
   await writeAtomically(manifest.destination, content);
 }
 
-function printPlan(io, root, entries) {
+function printPlan(io, root, entries, include, detectedRxSwiftAt) {
   io.stdout.write(`대상 프로젝트: ${root}\n`);
+  if (detectedRxSwiftAt) {
+    io.stdout.write(`자동 포함: ${detectedRxSwiftAt}에서 RxSwift 사용을 확인해 관련 문서 3개를 포함해요.\n`);
+  }
+  const omitted = [];
+  if (!include.has('gitflow')) omitted.push('Git 작업 흐름 1개 (`--include gitflow`)');
+  if (!include.has('rxswift')) omitted.push('RxSwift 3개 (`--include rxswift`)');
+  if (omitted.length > 0) {
+    io.stdout.write(`선택 문서 제외: ${omitted.join(', ')}\n`);
+  }
   for (const entry of entries) {
     io.stdout.write(`${entry.status.padEnd(16)} ${entry.target}\n`);
   }
@@ -458,7 +539,13 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const root = await resolveTarget(options.target);
     const projectName = markdownText(options.projectName || path.basename(root));
     const manifest = await loadManifest(root);
-    const { entries, knownTargets, retiredEntries } = await loadEntries(projectName, options.include);
+    const include = new Set(options.include);
+    let detectedRxSwiftAt = null;
+    if (!include.has('rxswift')) {
+      detectedRxSwiftAt = await detectRxSwift(root);
+      if (detectedRxSwiftAt) include.add('rxswift');
+    }
+    const { entries, knownTargets, retiredEntries } = await loadEntries(projectName, include);
     const plan = [];
     for (const entry of entries) {
       plan.push(await inspectEntry(root, entry, manifest.files.get(entry.target)));
@@ -477,7 +564,7 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
       );
       if (retiredEntry) plan.push(retiredEntry);
     }
-    printPlan(io, root, plan);
+    printPlan(io, root, plan, include, detectedRxSwiftAt);
     if (options.dryRun) return 0;
     if (!plan.some((entry) => ACTIONABLE_STATUSES.has(entry.status))) {
       io.stdout.write('적용할 변경이 없어요.\n');
