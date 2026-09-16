@@ -161,6 +161,7 @@ test('--include gitflow adds the optional document', async (t) => {
   assert.match(gitflow, /\[feat\] 프로필 새로고침 추가/u);
   assert.match(gitflow, /\[docs\] Git 작업 흐름 정리/u);
   assert.match(gitflow, /git commit -m "\[docs\] Git 작업 흐름 정리"/u);
+  assert.match(gitflow, /git log -1 --oneline/u);
   assert.doesNotMatch(gitflow, /(?:feat|fix|refactor|test|docs|chore): /u);
   assert.match(gitflow, /#### PR 제목을 작성해요/u);
   assert.match(gitflow, /\[docs\] Git 작업 흐름을 개선한다/u);
