@@ -165,12 +165,17 @@ test('--include gitflow adds the optional document', async (t) => {
   assert.match(gitflow, /#### PR 제목을 작성해요/u);
   assert.match(gitflow, /\[docs\] Git 작업 흐름을 개선한다/u);
   assert.match(gitflow, /#### PR 본문은 저장소 템플릿을 따라요/u);
-  assert.match(gitflow, /새로 작성하는 PR 본문은 `-다`체로 통일/u);
+  assert.match(gitflow, /새로 작성하는 문장은 `-다`체로 통일해요/u);
   assert.match(gitflow, /\.github\/PULL_REQUEST_TEMPLATE\.md/u);
   assert.match(gitflow, /PR 템플릿이 없어요\. 이 저장소에 새 템플릿을 만들까요\?/u);
-  assert.match(gitflow, /명시적으로 요청하지 않았다면 새 이슈를 만들지 않아요/u);
+  assert.match(gitflow, /사용자가 요청하지 않았다면 PR을 만들기 위해 새 이슈를 만들지 않아요/u);
+  assert.match(gitflow, /gh --version/u);
+  assert.match(gitflow, /GitHub CLI가 없어요\. gh 방식으로 PR을 만들 수 있도록 설치할까요\?/u);
+  assert.match(gitflow, /gh pr create/u);
+  assert.match(gitflow, /설치를 원하지 않으면 push 결과의 GitHub 링크나 웹 화면에서 PR을 만들어요/u);
   assert.match(gitflow, /## 커밋·PR 전 체크리스트/u);
   assert.match(gitflow, /기본 브랜치가 `main`이고 원격 이름이 `origin`인 경우/u);
+  assert.doesNotMatch(gitflow, /## 작업 중 기본 브랜치|## 작업 중 변경 보관|## 긴급 수정과 릴리스/u);
   assert.doesNotMatch(gitflow, /Yeobaek|Seoul|MapBox|Tuist|PopPang/u);
 });
 
