@@ -1,0 +1,313 @@
+---
+title: UIKit View·ViewModel 프로토콜 패턴
+description: ViewType과 ViewModelType의 공통 계약, 화면별 프로토콜, ViewData 렌더링과 구현체 주입 방법을 설명해요.
+---
+
+# {{PROJECT_NAME}} UIKit View·ViewModel 프로토콜 패턴
+
+View는 입력 이벤트와 `render`를, ViewModel은 `transform`을 프로토콜로 공개해요. ViewController가 이 계약에 의존하면 레이아웃을 바꾸거나 테스트용 ViewModel을 주입할 때 화면 연결 코드를 유지할 수 있어요.
+
+> 이 문서는 UIKit·RxSwift를 사용하는 참고 프로젝트의 구조를 일반화한 검토 예시예요. 생성 대상 프로젝트가 같은 구조나 라이브러리를 사용한다는 뜻은 아니에요. 아래 예제는 Swift 5.7 이상 문법을 사용해요. 실제 Swift 언어 모드, 동시성 설정과 RxSwift 채택 여부는 프로젝트에서 확인해요.
+
+## 참고 프로젝트에서 확인한 구조
+
+`RTK_SDK_iOS_Sample`의 `MapseaRTKSample/` 아래 파일을 분석했어요. 경로는 참고 프로젝트 기준이며, 생성 대상 프로젝트에서 열 수 있는 링크는 아니에요.
+
+| 확인한 파일 | 현재 구현 |
+| --- | --- |
+| `Presentation/Common/ViewType.swift` | `UIView` 제약, `associatedtype ViewData`, `render(_:)`를 정의해요. |
+| `Presentation/Common/ViewModelType.swift` | `Input`·`Output` 연관 타입과 `transform(input:disposeBag:)`을 정의해요. |
+| `Presentation/RTKMap/RTKMapViewProtocol.swift` | `ViewData`를 `RTKMapViewData`로 고정하고 텍스트 입력과 연결·해제 이벤트를 공개해요. |
+| `Presentation/RTKMap/RTKMapView.swift`, `DashboardView.swift` | 같은 `RTKMapViewProtocol`을 구현해 서로 다른 레이아웃에 같은 데이터를 표시해요. |
+| `Presentation/RTKMap/RTKMapViewModel.swift` | `ViewModelType`을 채택하고 중첩 `Input`·`Output` 타입과 `Driver<RTKMapViewData>`를 제공해요. |
+| `Presentation/RTKMap/RTKMapViewController.swift` | `screen: any RTKMapViewProtocol`과 **구체 타입** `RTKMapViewModel`을 주입받아요. `loadView()`에서 화면을 설치하고 Output을 `render`에 전달해요. |
+| `Application/AppDIContainer.swift` | View Factory는 `any RTKMapViewProtocol`, ViewModel Factory는 `RTKMapViewModel`을 반환해요. |
+
+참고 프로젝트에서는 View 구현체를 교체할 수 있지만 ViewModel 주입 경계는 구체 타입에 연결되어 있어요. 아래 예제는 공통 계약을 따르면서 **화면별 ViewModel 프로토콜도 추가하는 확장안**이에요. 참고 프로젝트에 이미 이 확장까지 구현되어 있다고 해석하지 않아요.
+
+## 역할과 데이터 흐름
+
+```text
+View의 입력 이벤트 → ViewController가 Input 구성 → ViewModel.transform
+ViewModel의 Output → ViewController가 구독 → View.render(ViewData)
+```
+
+| 구성 요소 | 맡는 일 |
+| --- | --- |
+| 공통 프로토콜 | 모든 화면에서 공유할 `render`·`transform`의 형태를 정의해요. |
+| 화면별 프로토콜 | 해당 화면의 입력과 표시 데이터 타입을 고정해요. |
+| ViewData | 표시할 문자열과 UI 상태를 값으로 전달해요. UIKit 객체나 Repository를 담지 않아요. |
+| View | 레이아웃, 입력 이벤트 공개, 표시와 애니메이션을 맡아요. |
+| ViewModel | 입력을 처리하고 UseCase 결과나 화면 상태를 표시 데이터로 바꿔요. |
+| ViewController | UIKit 수명 주기, Input 구성, Output 구독과 구독 수명을 관리해요. |
+| DI Container·Coordinator | 구현체를 생성·주입하고 화면 진입과 전환을 연결해요. |
+
+연결 성공 판단이나 숫자 포맷팅은 ViewModel에서 끝내요. View는 전달받은 상태로 색상·버튼 표시를 바꾸거나 패널을 펼칠 수 있어요. 참고 프로젝트의 `RTKMapView`도 패널 확장 같은 표시 전용 상태를 관리해요. View에서 상태를 전혀 보관하면 안 된다는 규칙은 아니에요.
+
+## 공통 계약을 정의해요
+
+다음 Swift 코드 블록은 순서대로 연결되는 작은 카운터 화면 예제예요. 버튼을 누르면 ViewModel이 횟수를 계산하고 View는 완성된 문자열을 표시해요. 네트워크가 없는 예제이므로 UseCase는 생략해요. 실제 기능에서는 기존 Domain 계약을 주입해요.
+
+```swift
+import RxCocoa
+import RxSwift
+import UIKit
+
+protocol ViewType: UIView {
+    associatedtype ViewData
+
+    /// 전달받은 표시 데이터를 화면에 반영해요.
+    ///
+    /// - Parameter data: 화면에 표시할 값이에요.
+    func render(
+        _ data: ViewData
+    )
+}
+
+protocol ViewModelType {
+    associatedtype Input
+    associatedtype Output
+
+    /// 화면 입력을 출력 상태로 변환해요.
+    ///
+    /// - Parameters:
+    ///   - input: 화면에서 전달한 입력 스트림이에요.
+    ///   - disposeBag: 직접 구독하는 화면 밖 동작의 수명을 관리해요.
+    /// - Returns: 화면에서 구독할 출력 스트림이에요.
+    func transform(
+        input: Input,
+        disposeBag: DisposeBag
+    ) -> Output
+}
+```
+
+`ViewType: UIView`는 구현체가 `UIView`의 하위 타입이어야 한다는 제약이에요. 프로토콜이 View 객체를 대신 생성하지는 않아요. 이 제약 덕분에 ViewController가 주입받은 화면을 자신의 `view`로 설치할 수 있어요.
+
+`associatedtype`은 화면마다 다른 데이터 타입을 선택하게 해요. 공통 계약에 특정 화면의 버튼이나 표시 필드를 넣지 않아요. 공통 계약은 `Presentation/Common/`에, 화면별 계약과 구현은 `Presentation/<Feature>/`에 둘 수 있어요.
+
+## 화면별 View와 ViewModel 계약을 고정해요
+
+```swift
+struct CounterViewData: Equatable {
+    let countText: String
+}
+
+protocol CounterViewProtocol: ViewType where ViewData == CounterViewData {
+    var incrementTapped: Observable<Void> { get }
+}
+
+struct CounterInput {
+    let incrementTapped: Observable<Void>
+}
+
+struct CounterOutput {
+    let viewData: Driver<CounterViewData>
+}
+
+protocol CounterViewModelProtocol: ViewModelType
+where Input == CounterInput, Output == CounterOutput {}
+```
+
+View 프로토콜에는 `UIButton`이나 `UILabel`을 노출하지 않아요. 이벤트와 `render`만 공개하면 ViewController가 내부 레이아웃이나 UIKit 컨트롤의 종류를 몰라도 돼요. 이미 `rx.tap`이 있는 이벤트는 `asObservable()`로 전달하고, 전달만을 위한 Subject를 새로 만들지 않아요.
+
+`ViewModelType`을 채택하는 것과 ViewController가 프로토콜을 주입받는 것은 별개예요. ViewModel까지 교체하려면 저장 프로퍼티와 생성자 타입도 `any CounterViewModelProtocol`로 선언해야 해요. 그래서 Input·Output을 구체 ViewModel 안에만 두지 않고 화면 계약으로 분리했어요.
+
+`any ViewType`만으로는 어떤 `ViewData`를 받는지 알 수 없어요. 화면별 프로토콜의 `where ViewData == CounterViewData`가 그 타입을 고정해요. ViewModel도 같은 방식으로 Input·Output을 고정하면 `any CounterViewModelProtocol`을 통해 `transform`을 호출할 수 있어요. 연관 타입을 확정하지 않은 existential의 멤버 접근에는 제한이 있어요. [Swift SE-0309](https://github.com/swiftlang/swift-evolution/blob/main/proposals/0309-unlock-existential-types-for-all-protocols.md)에서 이 제약을 확인할 수 있어요.
+
+## View는 이벤트를 공개하고 데이터만 표시해요
+
+```swift
+final class CounterView: UIView, CounterViewProtocol {
+    private let countLabel = UILabel()
+    private let incrementButton = UIButton(type: .system)
+
+    var incrementTapped: Observable<Void> {
+        return self.incrementButton.rx.tap.asObservable()
+    }
+
+    /// 카운터의 레이블과 버튼을 배치해요.
+    ///
+    /// - Parameter frame: View의 초기 프레임이에요.
+    override init(
+        frame: CGRect
+    ) {
+        super.init(frame: frame)
+        self.backgroundColor = .systemBackground
+        self.incrementButton.setTitle("횟수 늘리기", for: .normal)
+
+        let stack = UIStackView(arrangedSubviews: [self.countLabel, self.incrementButton])
+        stack.axis = .vertical
+        stack.spacing = 16
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        self.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: self.safeAreaLayoutGuide.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: self.safeAreaLayoutGuide.centerYAnchor)
+        ])
+    }
+
+    /// 코드로만 생성하므로 아카이브에서 복원할 수 없어요.
+    ///
+    /// - Parameter coder: 사용하지 않는 아카이브 디코더예요.
+    @available(*, unavailable)
+    required init?(
+        coder: NSCoder
+    ) {
+        fatalError("init(coder:) is unavailable")
+    }
+
+    /// ViewModel이 만든 횟수 문구를 표시해요.
+    ///
+    /// - Parameter data: 표시할 횟수 문구예요.
+    func render(
+        _ data: CounterViewData
+    ) {
+        self.countLabel.text = data.countText
+    }
+}
+```
+
+이 View는 횟수를 계산하거나 ViewModel을 보관하지 않아요. 같은 계약을 구현한 다른 View를 주입하면 바인딩을 바꾸지 않고 레이아웃을 교체할 수 있어요. `render`는 표시만 갱신하고 입력 이벤트를 다시 발생시키지 않도록 해요.
+
+## ViewModel은 출력 스트림을 조립해요
+
+```swift
+final class DefaultCounterViewModel: CounterViewModelProtocol {
+    /// 탭 횟수를 계산해 표시 데이터로 변환해요.
+    ///
+    /// - Parameters:
+    ///   - input: 횟수를 늘리는 버튼 이벤트예요.
+    ///   - disposeBag: 이 예제에는 직접 구독하는 동작이 없어 사용하지 않아요.
+    /// - Returns: 초기값과 탭마다 갱신되는 화면 데이터예요.
+    func transform(
+        input: CounterInput,
+        disposeBag: DisposeBag
+    ) -> CounterOutput {
+        let viewData = input.incrementTapped
+            .scan(0) { count, _ in count + 1 }
+            .startWith(0)
+            .map { count in CounterViewData(countText: "\(count)회") }
+            .asDriver(onErrorDriveWith: .empty())
+
+        return CounterOutput(viewData: viewData)
+    }
+}
+```
+
+문자열은 ViewModel에서 만들고 Output 구독은 ViewController에 맡겨요. 화면 상태를 내부에서 구독한 뒤 별도 Relay에 다시 전달할 필요는 없어요. 이 예제의 `disposeBag`은 공통 계약을 맞추기 위해 받으며 실제로 사용하지 않아요.
+
+`Driver`는 오류를 내보내지 않고 메인 스케줄러에서 값을 전달하며, 연결된 구독 사이에서 최신 값 하나와 실행을 공유해요. 모든 구독이 해제된 뒤 다시 연결하면 상태가 영구히 유지되는 것은 아니에요. [RxSwift의 Driver 설명](https://github.com/ReactiveX/RxSwift/blob/main/Documentation/Traits.md#driver)을 참고해요.
+
+예제의 버튼 이벤트는 정상 경로에서 오류를 내보내지 않아 `.empty()`를 대체 스트림으로 사용했어요. 네트워크 오류까지 무조건 `.empty()`로 바꾸면 실패 이유를 숨기고 화면 갱신을 끝낼 수 있어요. 실제 요청은 성공·로딩·실패를 ViewData로 변환하고 재시도 후에도 입력이 살아 있는지 확인해요.
+
+## ViewController에서 두 프로토콜을 연결해요
+
+```swift
+final class CounterViewController: UIViewController {
+    private let screen: any CounterViewProtocol
+    private let viewModel: any CounterViewModelProtocol
+    private let disposeBag = DisposeBag()
+
+    /// 화면 표시와 입력 처리를 담당할 구현체를 주입받아요.
+    ///
+    /// - Parameters:
+    ///   - screen: 카운터를 표시할 View예요.
+    ///   - viewModel: 입력을 카운터 상태로 변환할 ViewModel이에요.
+    init(
+        screen: any CounterViewProtocol,
+        viewModel: any CounterViewModelProtocol
+    ) {
+        self.screen = screen
+        self.viewModel = viewModel
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    /// 코드로만 생성하므로 아카이브에서 복원할 수 없어요.
+    ///
+    /// - Parameter coder: 사용하지 않는 아카이브 디코더예요.
+    @available(*, unavailable)
+    required init?(
+        coder: NSCoder
+    ) {
+        fatalError("init(coder:) is unavailable")
+    }
+
+    override func loadView() {
+        self.view = self.screen
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        self.bindViewModel()
+    }
+
+    private func bindViewModel() {
+        let input = CounterInput(incrementTapped: self.screen.incrementTapped)
+        let output = self.viewModel.transform(input: input, disposeBag: self.disposeBag)
+
+        output.viewData
+            .drive(onNext: { [weak self] data in
+                self?.screen.render(data)
+            })
+            .disposed(by: self.disposeBag)
+    }
+}
+```
+
+`loadView()`는 주입받은 View를 루트 화면으로 설치해요. 바인딩은 `viewDidLoad()`에서 한 번 구성해요. 화면이 다시 나타날 때마다 같은 Bag에 `transform`과 구독을 추가하면 요청이나 액션이 중복 실행될 수 있어요.
+
+ViewController가 Bag을 소유하고 구독 클로저는 ViewController를 약하게 참조해요. Bag은 화면이 잠시 사라지는 시점이 아니라 **ViewController가 해제되는 시점**에 함께 해제돼요. 사라질 때 중단해야 하는 작업은 수명 주기 입력이나 별도 취소 정책으로 다뤄요.
+
+## 생성 위치에서 구현체를 선택해요
+
+```swift
+final class AppDIContainer {
+    // AppFlowCoordinator
+    /// 카운터 화면의 View 구현체를 만들어요.
+    ///
+    /// - Returns: 새로 생성한 카운터 View예요.
+    func makeCounterScreen() -> any CounterViewProtocol {
+        return CounterView(frame: .zero)
+    }
+
+    // AppFlowCoordinator
+    /// 카운터 화면의 ViewModel 구현체를 만들어요.
+    ///
+    /// - Returns: 새로 생성한 카운터 ViewModel이에요.
+    func makeCounterViewModel() -> any CounterViewModelProtocol {
+        return DefaultCounterViewModel()
+    }
+}
+```
+
+Coordinator에서는 두 Factory의 반환값을 `CounterViewController(screen:viewModel:)`에 전달해요. 구현체를 바꿀 때는 Factory나 테스트의 주입 코드만 바꾸면 돼요. 화면별 객체 생성과 공유 범위는 [DI Container 패턴](dicontainer.md)을 따라 확인해요.
+
+## 화면 밖 동작과 구독 수명을 정해요
+
+참고 프로젝트는 화면 전환·알림을 Actions 클로저로 Coordinator에 위임해요. ViewModel은 연결 실패 알림 스트림만 직접 구독하고, 메인 스케줄러로 옮긴 뒤 전달받은 Bag에 넣어요. 화면 상태는 Output으로 반환해요.
+
+프로젝트에 적용할 때는 다음을 확인해요.
+
+- 하나의 요청 스트림을 화면 상태와 액션이 함께 구독한다면 요청이 중복 실행되지 않도록 공유 위치를 정해요. 참고 프로젝트는 연결 결과를 `share(replay: 1, scope: .whileConnected)`로 공유해요.
+- Actions 클로저가 Coordinator를, Coordinator가 화면을 보관한다면 순환 참조가 생기는지 확인해요. 해제되어야 하는 객체는 약하게 캡처해요.
+- ViewModel을 여러 화면에서 공유한다면 화면 하나의 Bag이 전체 작업 수명을 결정해도 되는지 다시 검토해요. 이 예제는 화면마다 ViewModel을 생성해요.
+- Rx의 메인 스케줄러 전달과 Swift의 actor 격리는 별개예요. Swift 6 엄격 동시성을 사용하는 프로젝트에서는 UI 계약의 `@MainActor`와 바인딩 클로저의 격리도 실제 빌드 설정으로 검증해요.
+
+## 기존 화면에 적용하는 순서
+
+1. ViewController가 직접 접근하는 UI 속성과 이벤트를 찾아 화면별 View 프로토콜로 옮겨요.
+2. 표시 문자열과 UI 상태를 ViewData로 묶고 View에 `render`를 구현해요.
+3. ViewModel이 공통 `ViewModelType`을 채택하고 상태 스트림을 Output으로 반환하게 해요.
+4. ViewModel도 교체해야 한다면 Input·Output을 화면 계약으로 분리하고 화면별 ViewModel 프로토콜을 추가해요.
+5. ViewController의 프로퍼티·생성자와 DI Factory 반환 타입을 프로토콜로 바꿔요. 구체 타입으로 다운캐스팅하는 코드가 남았는지 확인해요.
+6. 입력 한 번당 동작 한 번, 초기 상태 표시, 화면 해제 시 구독 정리, 대체 구현 주입을 검증해요.
+
+테스트에서는 ViewModel에 제어 가능한 입력 스트림을 전달해 초기값과 다음 ViewData를 확인해요. 바인딩 테스트는 `UIView`를 상속한 Spy View가 받은 데이터를 기록하고 Stub ViewModel의 출력을 전달하는지 확인할 수 있어요. UIKit 객체와 `Driver.drive`를 사용하는 테스트는 메인 스레드에서 실행해요.
+
+## 관련 문서
+
+- [아키텍처](architecture.md): Presentation과 Domain의 책임을 확인해요.
+- [RxSwift Input/Output 패턴](rxswift-input-output.md): Relay 입력 방식과 직접 Observable을 전달하는 방식을 비교해요.
+- [Rx 바인딩 정책](rxswift-binding-policy.md): 팀의 스레드·메모리·Driver 사용 기준을 확인해요.
+- [테스트](../development/testing.md): 실제 타깃과 실행 명령을 기록해요.
+- [프로젝트 작업 안내](../../AGENTS.md): 문서 적용 기준을 확인해요.
