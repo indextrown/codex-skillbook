@@ -36,7 +36,7 @@ async function invoke(args, { tty = false, confirm = false } = {}) {
   return { code, output, errors };
 }
 
-test('--dry-run previews all ten required files without changing the project', async (t) => {
+test('--dry-run previews all eleven required files without changing the project', async (t) => {
   const root = project(t);
   const result = await invoke(['init', 'ios-uikit', '--target', root, '--dry-run']);
 
@@ -45,6 +45,7 @@ test('--dry-run previews all ten required files without changing the project', a
   assert.match(result.output, /CREATE\s+CLAUDE\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/architecture\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/dicontainer\.md/u);
+  assert.match(result.output, /CREATE\s+docs\/architecture\/view-viewmodel-protocols\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/rxswift\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/rxswift-binding-policy\.md/u);
   assert.match(result.output, /CREATE\s+docs\/architecture\/rxswift-input-output\.md/u);
@@ -85,6 +86,7 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs')).sort(), ['architecture', 'development']);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'architecture')).sort(), [
     'architecture.md', 'dicontainer.md', 'rxswift-binding-policy.md', 'rxswift-input-output.md', 'rxswift.md',
+    'view-viewmodel-protocols.md',
   ]);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'development')).sort(), [
     'gitflow.md', 'swiftstyle.md', 'testing.md',
@@ -95,6 +97,7 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.match(agents, /\| 확인할 내용 \| 문서 \| 확인 기준 \|/u);
   assert.match(agents, /\[아키텍처\]\(docs\/architecture\/architecture\.md\)/u);
   assert.match(agents, /\[DI Container\]\(docs\/architecture\/dicontainer\.md\)/u);
+  assert.match(agents, /\[View·ViewModel 프로토콜\]\(docs\/architecture\/view-viewmodel-protocols\.md\)/u);
   assert.match(agents, /\[Swift 스타일\]\(docs\/development\/swiftstyle\.md\)/u);
   assert.match(agents, /\[테스트\]\(docs\/development\/testing\.md\)/u);
   assert.match(agents, /\[Git 작업 흐름\]\(docs\/development\/gitflow\.md\)/u);
@@ -127,6 +130,7 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.match(architecture, /## 새 기능 개발 체크리스트/u);
   assert.match(architecture, /## 관련 문서/u);
   assert.match(architecture, /\[DI Container 패턴\]\(dicontainer\.md\)/u);
+  assert.match(architecture, /\[View·ViewModel 프로토콜 패턴\]\(view-viewmodel-protocols\.md\)/u);
   assert.match(architecture, /\[테스트\]\(\.\.\/development\/testing\.md\)/u);
   assert.doesNotMatch(architecture, /Root\.md/u);
   assert.match(architecture, /프로젝트 코드를 분석하지 않아요/u);
@@ -143,6 +147,14 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.match(diContainer, /### ViewModel Factory 메서드/u);
   assert.match(diContainer, /func makeSplashViewModel\(\n\s+_ actions: SplashViewActions/u);
   assert.doesNotMatch(diContainer, /Navi 3\.0|이유업|다른 UIKit 프로젝트/u);
+  const protocolsPath = path.join(root, 'docs', 'architecture', 'view-viewmodel-protocols.md');
+  const protocols = fs.readFileSync(protocolsPath, 'utf8');
+  assert.match(protocols, /# MyUIKitApp UIKit View·ViewModel 프로토콜 패턴/u);
+  assert.doesNotMatch(protocols, /\{\{PROJECT_NAME\}\}|\/Users\//u);
+  for (const match of protocols.matchAll(/\]\(([^)]+\.md)\)/gu)) {
+    if (/^https?:/u.test(match[1])) continue;
+    assert.equal(fs.existsSync(path.resolve(path.dirname(protocolsPath), match[1])), true, match[1]);
+  }
   const swiftStyle = fs.readFileSync(path.join(root, 'docs', 'development', 'swiftstyle.md'), 'utf8');
   assert.match(swiftStyle, /# MyUIKitApp Swift 스타일 가이드/u);
   assert.match(swiftStyle, /## 파일 헤더/u);
@@ -163,6 +175,7 @@ test('interactive confirmation creates only the documented default tree', async 
     'CLAUDE.md',
     'docs/architecture/architecture.md',
     'docs/architecture/dicontainer.md',
+    'docs/architecture/view-viewmodel-protocols.md',
     'docs/architecture/rxswift-binding-policy.md',
     'docs/architecture/rxswift-input-output.md',
     'docs/architecture/rxswift.md',
@@ -235,6 +248,7 @@ test('the legacy --include rxswift option remains compatible', async (t) => {
   assert.match(result.output, /--include 옵션은 더 이상 필요하지 않아요/u);
   assert.deepEqual(fs.readdirSync(path.join(root, 'docs', 'architecture')).sort(), [
     'architecture.md', 'dicontainer.md', 'rxswift-binding-policy.md', 'rxswift-input-output.md', 'rxswift.md',
+    'view-viewmodel-protocols.md',
   ]);
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'gitflow.md')), true);
   const guide = fs.readFileSync(path.join(root, 'docs', 'architecture', 'rxswift.md'), 'utf8');
@@ -342,7 +356,7 @@ test('re-running the command leaves generated files unchanged', async (t) => {
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 10);
+  assert.equal((result.output.match(/UNCHANGED/g) || []).length, 11);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
 });
 
@@ -366,27 +380,30 @@ test('re-running the command updates a tracked file that the user did not edit',
   assert.equal(updatedManifest.files['AGENTS.md'], sha256(fs.readFileSync(agentsPath)));
 });
 
-test('re-running an older managed kit adds the new default DI Container document', async (t) => {
-  const root = project(t);
-  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
-  assert.equal((await invoke(args)).code, 0);
-  const diContainerPath = path.join(root, 'docs', 'architecture', 'dicontainer.md');
-  fs.rmSync(diContainerPath);
-  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
-  delete manifest.files['docs/architecture/dicontainer.md'];
-  fs.writeFileSync(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+for (const documentName of ['dicontainer.md', 'view-viewmodel-protocols.md']) {
+  test(`re-running an older managed kit adds the default ${documentName} document`, async (t) => {
+    const root = project(t);
+    const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+    assert.equal((await invoke(args)).code, 0);
+    const documentTarget = `docs/architecture/${documentName}`;
+    const documentPath = path.join(root, documentTarget);
+    const expected = fs.readFileSync(documentPath);
+    fs.rmSync(documentPath);
+    const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+    delete manifest.files[documentTarget];
+    fs.writeFileSync(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
 
-  const result = await invoke(args);
+    const result = await invoke(args);
 
-  assert.equal(result.code, 0, result.errors);
-  assert.match(result.output, /CREATE\s+docs\/architecture\/dicontainer\.md/u);
-  assert.match(fs.readFileSync(diContainerPath, 'utf8'), /## AppDIContainer 패턴/u);
-  const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
-  assert.equal(
-    updatedManifest.files['docs/architecture/dicontainer.md'],
-    sha256(fs.readFileSync(diContainerPath)),
-  );
-});
+    assert.equal(result.code, 0, result.errors);
+    assert.ok(result.output.split('\n').some((line) =>
+      line.startsWith('CREATE') && line.endsWith(documentTarget),
+    ));
+    assert.deepEqual(fs.readFileSync(documentPath), expected);
+    const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+    assert.equal(updatedManifest.files[documentTarget], sha256(expected));
+  });
+}
 
 test('re-running an older managed kit adds the new CLAUDE.md bridge', async (t) => {
   const root = project(t);
@@ -538,7 +555,7 @@ test('a legacy file that already matches the template can be tracked safely', as
   const result = await invoke(args);
 
   assert.equal(result.code, 0, result.errors);
-  assert.match(result.output, /생성 0개, 갱신 0개, 삭제 0개, 추적 10개, 관리 종료 0개, 사용자 문서 보존 0개/u);
+  assert.match(result.output, /생성 0개, 갱신 0개, 삭제 0개, 추적 11개, 관리 종료 0개, 사용자 문서 보존 0개/u);
   assert.deepEqual(fs.readFileSync(path.join(root, 'AGENTS.md')), before);
   assert.equal(fs.existsSync(manifestPath(root)), true);
 });
@@ -565,7 +582,7 @@ test('a differing existing file is preserved while missing files are created', a
 
   assert.equal(result.code, 2);
   assert.match(result.output, /SKIP_UNTRACKED\s+AGENTS\.md/u);
-  assert.match(result.output, /생성 9개, 갱신 0개, 삭제 0개, 추적 0개, 관리 종료 0개, 사용자 문서 보존 1개/u);
+  assert.match(result.output, /생성 10개, 갱신 0개, 삭제 0개, 추적 0개, 관리 종료 0개, 사용자 문서 보존 1개/u);
   assert.equal(fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), '팀에서 작성한 규칙\n');
   assert.equal(fs.existsSync(path.join(root, 'docs', 'development', 'testing.md')), true);
 });

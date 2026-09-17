@@ -70,6 +70,7 @@ Sources/
 - `Presentation/<Feature>/`에 View, ViewController, ViewModel을 묶어요. 흐름이 큰 앱이라면 `Presentation/<Scene>/<Feature>/`로 한 단계 더 나눌 수 있어요.
 - `Presentation/Common/`에는 둘 이상의 기능에서 실제로 재사용하는 UI만 둬요. 화면 하나에서만 쓰는 View를 공통 영역에 미리 올리지 않아요.
 - ViewController는 UIKit 수명 주기와 이벤트 연결을, ViewModel은 입력을 받아 화면 상태를 만드는 일을 맡아요. 표시 전용 View에 UseCase를 주입하지 않아요.
+- View나 ViewModel 구현체를 교체해야 한다면 [View·ViewModel 프로토콜 패턴](view-viewmodel-protocols.md)에서 공통 계약과 화면별 주입 경계를 확인해요.
 
 ## 의존성 방향과 데이터 흐름
 
@@ -175,5 +176,6 @@ RxSwift/RxCocoa, GRDB, SnapKit, Then은 **선택 가능한 구현 도구**예요
 ## 관련 문서
 
 - [DI Container 패턴](dicontainer.md)에서 객체 생성 방식, 공유 범위와 사용처 주석 규칙을 확인해요.
+- [View·ViewModel 프로토콜 패턴](view-viewmodel-protocols.md)에서 ViewData 렌더링과 프로토콜을 통한 구현체 주입을 확인해요.
 - [테스트](../development/testing.md)에서 실제 타깃과 실행 명령을 확인해요.
-- RxSwift와 RxCocoa를 채택해 `--include rxswift`로 문서를 추가했다면 `rxswift.md`에서 타입·연산자를, `rxswift-binding-policy.md`에서 팀 정책을, `rxswift-input-output.md`에서 화면 바인딩 패턴을 확인해요.
+- RxSwift와 RxCocoa를 채택했다면 [타입·연산자](rxswift.md), [바인딩 정책](rxswift-binding-policy.md), [Input/Output 패턴](rxswift-input-output.md)을 함께 확인해요.

@@ -94,7 +94,7 @@ cd /absolute/path/MyUIKitApp
 npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit
 ```
 
-명령은 파일별 변경 사항을 먼저 보여주고 `적용할까요? [y/N]`를 물어요. 승인하면 현재 문서 키트의 문서 10개를 모두 만들어요.
+명령은 파일별 변경 사항을 먼저 보여주고 `적용할까요? [y/N]`를 물어요. 승인하면 현재 문서 키트의 문서 11개를 모두 만들어요.
 
 ```text
 MyUIKitApp/
@@ -106,6 +106,7 @@ MyUIKitApp/
     ├── architecture/
     │   ├── architecture.md           ← UIKit 아키텍처 검토 예시
     │   ├── dicontainer.md            ← DI 객체 생성과 공유 기준
+    │   ├── view-viewmodel-protocols.md ← View·ViewModel 계약과 주입
     │   ├── rxswift.md                ← RxSwift·RxCocoa 타입과 연산자
     │   ├── rxswift-binding-policy.md ← Rx 바인딩 정책 검토안
     │   └── rxswift-input-output.md   ← ViewModel Input·Output 패턴
@@ -117,7 +118,7 @@ MyUIKitApp/
 
 `AGENTS.md`에서 작업에 필요한 문서와 적용 기준을 바로 찾아갈 수 있어요. `CLAUDE.md`는 [Claude Code의 파일 가져오기 문법](https://code.claude.com/docs/en/memory#agentsmd)인 `@AGENTS.md`를 사용해 같은 작업 기준을 불러와요. 공통 규칙을 두 파일에 중복해서 관리하지 않아요.
 
-생성 문서는 모두 필수 문서예요. 아키텍처, DI Container, RxSwift, Git 작업 흐름과 Swift 스타일 문서는 프로젝트를 자동 분석해 확정한 규칙이 아니라 검토할 초안이에요. 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
+생성 문서는 모두 필수 문서예요. 아키텍처, DI Container, View·ViewModel 프로토콜, RxSwift, Git 작업 흐름과 Swift 스타일 문서는 프로젝트를 자동 분석해 확정한 규칙이 아니라 검토할 초안이에요. 생성 후 실제 코드와 팀 규칙에 맞게 다듬어 주세요.
 
 이전 명령에 있던 `--include gitflow`과 `--include rxswift`는 호환을 위해 계속 허용하지만, 이제 모든 문서를 기본 생성하므로 지정하지 않아도 돼요.
 

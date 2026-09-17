@@ -18,6 +18,10 @@
       "target": "docs/architecture/dicontainer.md"
     },
     {
+      "template": "docs/architecture/view-viewmodel-protocols.md.tmpl",
+      "target": "docs/architecture/view-viewmodel-protocols.md"
+    },
+    {
       "template": "docs/architecture/rxswift.md.tmpl",
       "target": "docs/architecture/rxswift.md"
     },
