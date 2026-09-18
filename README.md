@@ -94,7 +94,7 @@ cd /absolute/path/MyUIKitApp
 npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit
 ```
 
-명령은 파일별 변경 사항을 먼저 보여주고 `적용할까요? [y/N]`를 물어요. 승인하면 현재 문서 키트의 문서 12개를 모두 만들어요.
+명령은 파일별 변경 사항을 먼저 보여주고 `적용할까요? [y/N]`를 물어요. 승인하면 현재 문서 키트의 문서 13개를 모두 만들어요.
 
 ```text
 MyUIKitApp/
@@ -111,6 +111,7 @@ MyUIKitApp/
     │   ├── rxswift-binding-policy.md ← Rx 바인딩 정책 검토안
     │   └── rxswift-input-output.md   ← ViewModel Input·Output 패턴
     └── development/
+        ├── ai-attribution.md         ← 커밋·PR의 AI 작성 표기 규칙
         ├── gitflow.md                ← 브랜치·커밋·PR 작업 흐름
         ├── swiftstyle.md             ← Swift 코드 스타일 검토안
         ├── korean-editing.md         ← 한국어 초안 윤문 원칙

@@ -38,6 +38,10 @@
       "target": "docs/development/testing.md"
     },
     {
+      "template": "docs/development/ai-attribution.md.tmpl",
+      "target": "docs/development/ai-attribution.md"
+    },
+    {
       "template": "docs/development/korean-editing.md.tmpl",
       "target": "docs/development/korean-editing.md"
     },
