@@ -102,6 +102,7 @@ test('interactive confirmation creates only the documented default tree', async 
   assert.match(agents, /\[Swift 스타일\]\(docs\/development\/swiftstyle\.md\)/u);
   assert.match(agents, /\[테스트\]\(docs\/development\/testing\.md\)/u);
   assert.match(agents, /\[한국어 윤문 원칙\]\(docs\/development\/korean-editing\.md\)/u);
+  assert.match(agents, /\| PR 제목·본문 윤문 \| \[한국어 윤문 원칙\]\(docs\/development\/korean-editing\.md\) \| PR 생성 전 제목과 본문에 윤문 원칙 적용 \|/u);
   assert.match(agents, /\[Git 작업 흐름\]\(docs\/development\/gitflow\.md\)/u);
   assert.match(agents, /\[RxSwift\]\(docs\/architecture\/rxswift\.md\)/u);
   assert.doesNotMatch(agents, /Root\.md/u);
