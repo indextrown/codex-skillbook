@@ -46,6 +46,14 @@
       "target": "docs/development/korean-editing.md"
     },
     {
+      "template": "docs/development/examples/korean-editing-examples.md.tmpl",
+      "target": "docs/development/examples/korean-editing-examples.md"
+    },
+    {
+      "template": "docs/development/examples/pr-writing-examples.md.tmpl",
+      "target": "docs/development/examples/pr-writing-examples.md"
+    },
+    {
       "template": "docs/development/swiftstyle.md.tmpl",
       "target": "docs/development/swiftstyle.md"
     },
