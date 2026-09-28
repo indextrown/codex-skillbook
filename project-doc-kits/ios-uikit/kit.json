@@ -62,6 +62,15 @@
       "target": "docs/development/gitflow.md"
     }
   ],
+  "gitHooks": {
+    "directory": ".githooks",
+    "files": [
+      {
+        "template": "githooks/pre-push.tmpl",
+        "name": "pre-push"
+      }
+    ]
+  },
   "retiredFiles": [
     {
       "template": "retired/docs/Root.md.tmpl",
