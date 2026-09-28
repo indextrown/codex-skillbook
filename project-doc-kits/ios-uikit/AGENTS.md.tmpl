@@ -26,6 +26,8 @@
 | 아키텍처, 라이브러리, 빌드 명령이나 팀 정책을 확인하지 못했어요. | 단정하지 말고 `확인 필요`라고 표시해요. 확인할 파일이나 명령도 함께 적어요. |
 | 구조나 실행 방법을 바꿨어요. | 변경한 동작을 설명하는 문서도 같은 작업에서 갱신해요. |
 | 커밋 메시지나 PR 본문을 작성해요. | `Co-Authored-By: Claude` 같은 AI 공동 작성자 트레일러, `Generated with Claude Code` 같은 생성 문구와 AI 세션 링크를 넣지 않아요. 실제 사람의 기여 기록은 유지해요. |
+| push 전 코드 리뷰 git hook이 설정돼 있지 않아요. | `git config core.hooksPath`가 `.githooks`가 아니고 `git config project-docs.gitHooks`가 `declined`가 아니면, 작업을 시작할 때 사용자에게 설정할지 한 번 물어요. 승낙하면 `npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit --apply`를 실행해요. 거절하면 `git config project-docs.gitHooks declined`로 기록하고 다시 묻지 않아요. 동작은 [Git 작업 흐름](docs/development/gitflow.md#push-전-claude-코드-리뷰-hook을-설정할-수-있어요)을 따라요. |
+| push했는데 git hook이 `FAIL`을 냈어요. | 지적된 문제를 고치고 다시 push해요. `git push --no-verify`는 사용자가 요청할 때만 써요. |
 
 ## 작업 완료 전 확인
 

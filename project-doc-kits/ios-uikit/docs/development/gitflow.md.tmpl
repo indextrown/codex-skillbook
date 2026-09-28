@@ -112,6 +112,28 @@ git push -u origin feature/profile-refresh
 
 push가 완료되면 원격 저장소에 작업 브랜치가 생겨요. 첫 push 후에는 `-u`를 사용해 로컬과 원격 브랜치를 연결해요.
 
+#### push 전 Claude 코드 리뷰 hook을 설정할 수 있어요
+
+프로젝트 문서 키트는 브랜치를 push하기 직전에 Claude Code의 `code-review` 스킬을 돌리는 `pre-push` hook을 선택해서 설치할 수 있어요. 개인 설정이라 `.githooks/`는 `.gitignore`에 넣고 커밋하지 않아요. 터미널에서 `project-docs init`을 실행하면 문서를 적용한 뒤 한 번 물어요. 나중에 설정하려면 다음 명령을 실행해요.
+
+```bash
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit
+```
+
+| 항목 | 동작 |
+| --- | --- |
+| 설정하는 것 | `.githooks/pre-push`를 만들고, `git config core.hooksPath .githooks`를 설정하고, `.gitignore`에 `.githooks/`를 추가해요. |
+| 리뷰 범위 | 첫 push와 강제 push는 기본 브랜치에서 갈라진 뒤의 전체 변경, 후속 push는 새로 올라가는 커밋만 리뷰해요. |
+| 판정 | 정확성 버그·크래시·데이터 손실·보안 문제가 있으면 `FAIL`이고 push를 중단해요. 정리·스타일 제안은 막지 않아요. |
+| 건너뛰는 경우 | 브랜치 삭제, 태그 push, 기본 브랜치 push, 변경이 없는 push |
+| 설정값 | `CLAUDE_REVIEW_LEVEL`(기본 `medium`), `CLAUDE_REVIEW_TIMEOUT`(기본 900초) |
+| 우회 | `git push --no-verify` |
+| 필요한 도구 | 로그인한 `claude` CLI, `jq`, `perl`. 없으면 리뷰가 필요한 push를 막아요. |
+| 마지막 원본 출력 | 리뷰는 `.git/claude-review-last.json`, 판정은 `.git/claude-review-verdict.json` |
+| 거절 기록 | 설정을 거절하면 `git config project-docs.gitHooks declined`로 남기고 다시 묻지 않아요. `hooks` 명령은 기록과 관계없이 실행돼요. |
+
+이미 다른 hook 경로(husky 등)를 쓰거나 `.githooks/`를 커밋해 둔 저장소에서는 설정을 바꾸지 않아요. 한 번 push에 수십 초에서 몇 분이 걸리고 API 비용이 들어요.
+
 ### 7. PR을 만들고 리뷰를 요청해요
 
 #### GitHub CLI 사용을 먼저 검토해요

@@ -165,6 +165,23 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 
 보존한 파일이 있으면 종료 코드 `2`를 반환해 자동화에서도 부분 적용을 구분할 수 있어요. 경로 순회, 심볼릭 링크, 파일·디렉터리 충돌은 적용 전에 거부해요.
 
+### push 전 코드 리뷰 git hook 설정하기
+
+git 저장소 루트에서 `init`을 터미널로 실행하면, 문서를 적용한 뒤 `push 전 Claude 코드 리뷰 git hook을 설정할까요? [y/N]`를 한 번 물어요. 승낙하면 브랜치를 push하기 직전에 Claude Code의 `code-review` 스킬이 변경을 리뷰하고, 막아야 할 문제가 있으면 push를 중단해요. hook만 따로 설정하거나 나중에 설정하려면 다음 명령을 실행해요.
+
+```bash
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit
+```
+
+| 경우 | 동작 |
+| --- | --- |
+| 승낙 | `.githooks/pre-push`를 만들고 `git config core.hooksPath .githooks`를 설정한 뒤 `.gitignore`에 `.githooks/`를 추가해요. 개인 설정이라 hook 파일은 커밋하지 않아요. |
+| 거절 | `git config project-docs.gitHooks declined`로 기록하고 `init`에서 다시 묻지 않아요. |
+| `--apply`(비대화형) | hook은 설정하지 않고 위 명령만 안내해요. 질문 없이 설정하려면 `hooks ios-uikit --apply`를 써요. |
+| 다른 hook 설정이 있음 | `core.hooksPath`가 다른 경로이거나 `.githooks/`가 이미 커밋돼 있으면 바꾸지 않아요. |
+
+hook을 갱신할지 판단하는 해시는 커밋되는 `.project-docs/manifest.json`이 아니라 로컬 git 설정(`project-docs.pre-push.hash`)에 저장해요. 수정하지 않은 hook만 최신 템플릿으로 갱신하고, 직접 고친 hook은 `SKIP_MODIFIED`로 보존해요. 리뷰에는 로그인한 `claude` CLI, `jq`, `perl`이 필요하고 push마다 API 비용이 들어요.
+
 ## 자주 사용하는 스킬
 
 | 한글 제목 | 스킬 | 설명 |
