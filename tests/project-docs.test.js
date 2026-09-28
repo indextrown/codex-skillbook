@@ -1110,3 +1110,37 @@ test('an error in the optional hook check does not change the init result', asyn
   assert.doesNotMatch(declined.output, /건너뛰었어요/u);
   assert.match(declined.output, /거절한 기록이 있어 묻지 않았어요/u);
 });
+
+test('the pre-push hook reviews unpushed commits when the default branch cannot be found', (t) => {
+  const remote = project(t);
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote]);
+  const root = gitRepository(t);
+  const commit = (message) => execFileSync('git', [
+    '-C', root, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+    'commit', '-q', '--allow-empty', '-m', message,
+  ]);
+  commit('first');
+  // origin이 없고 upstream만 fetch된 저장소에서 URL로 push하는 경우예요.
+  execFileSync('git', ['-C', root, 'push', '-q', remote, 'main']);
+  execFileSync('git', ['-C', root, 'remote', 'add', 'upstream', remote]);
+  execFileSync('git', ['-C', root, 'fetch', '-q', 'upstream']);
+  execFileSync('git', ['-C', root, 'switch', '-q', '-c', 'feature/profile']);
+  fs.writeFileSync(path.join(root, 'Profile.swift'), 'struct Profile {}\n');
+  execFileSync('git', ['-C', root, 'add', 'Profile.swift']);
+  commit('feature');
+  const head = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+
+  const hook = path.join(project(t), 'pre-push');
+  fs.writeFileSync(hook, HOOK_TEMPLATE, { mode: 0o755 });
+  const result = spawnSync('bash', [hook, remote, remote], {
+    cwd: root,
+    input: `refs/heads/feature/profile ${head} refs/heads/feature/profile ${'0'.repeat(head.length)}\n`,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: '/usr/bin:/bin' },
+  });
+
+  // 범위를 정한 뒤 도구 확인에서 멈춰야 해요. 공통 조상 오류로 막히면 안 돼요.
+  assert.equal(result.status, 1);
+  assert.doesNotMatch(result.stderr, /공통 조상/u);
+  assert.match(result.stderr, /claude 명령을 찾을 수 없어요/u);
+});

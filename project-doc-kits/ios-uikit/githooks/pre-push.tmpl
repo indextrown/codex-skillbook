@@ -102,8 +102,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # 후속 push는 새로 올라가는 커밋만, 첫 push나 강제 push는 기본 브랜치에서 갈라진 뒤 전체를 리뷰해요.
   if [ "$remote_sha" != "$zero" ] && git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
     base="$remote_sha"
-  else
-    base=$(git merge-base "$default_branch" "$local_sha" 2>/dev/null) || fail "$default_branch 와의 공통 조상을 찾지 못했어요. git fetch $remote 후 다시 push해 보세요."
+  elif ! base=$(git merge-base "$default_branch" "$local_sha" 2>/dev/null); then
+    # origin이 없거나 기본 브랜치를 fetch하지 않았으면 원격 추적 브랜치에 아직 없는 커밋만 리뷰해요.
+    first=$(git rev-list --reverse "$local_sha" --not --remotes | head -n 1)
+    [ -n "$first" ] || continue
+    base=$(git rev-parse --verify --quiet "$first^") \
+      || fail "원격에 없는 첫 커밋이 저장소의 첫 커밋이라 리뷰 범위를 정하지 못했어요. git fetch 후 다시 push해 보세요."
   fi
 
   if git diff --quiet "$base" "$local_sha"; then

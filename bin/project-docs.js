@@ -499,11 +499,14 @@ async function loadGitHooks() {
 }
 
 async function activeDefaultHooks(root) {
-  const commonDirectory = git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
-  if (!commonDirectory) return [];
+  // --path-format=absolute는 git 2.31부터라서, 상대 경로로 받아 대상 루트 기준으로 풀어요.
+  const commonDirectory = git(root, ['rev-parse', '--git-common-dir']);
+  if (!commonDirectory) {
+    throw new Error('.git/hooks 위치를 확인하지 못해서 기존 hook을 보호할 수 없어요.');
+  }
   let entries;
   try {
-    entries = await fs.readdir(path.join(commonDirectory, 'hooks'), { withFileTypes: true });
+    entries = await fs.readdir(path.resolve(root, commonDirectory, 'hooks'), { withFileTypes: true });
   } catch (error) {
     if (error.code === 'ENOENT') return [];
     throw error;
@@ -661,16 +664,16 @@ function printHookResults(io, results) {
 
 // init 뒤에 이어지는 선택 단계예요. hook을 요청하지 않은 사용자의 종료 코드는 바꾸지 않아요.
 async function offerGitHooks(root, options, io) {
-  const hooks = await loadGitHooks();
   const declinedHint = `안내: git hook 설정을 거절한 기록이 있어 묻지 않았어요. 설정하려면 ${HOOK_COMMAND}을 실행해요.\n`;
-  // 거절했고 아직 설정하지 않은 저장소는 hook 경로를 살펴보지 않고 넘어가요.
-  if (git(root, ['config', '--local', '--get', HOOK_DECISION_KEY]) === 'declined'
-      && git(root, ['config', '--get', 'core.hooksPath']) !== hooks.directory) {
-    io.stdout.write(declinedHint);
-    return 0;
-  }
   let plan;
   try {
+    const hooks = await loadGitHooks();
+    // 거절했고 아직 설정하지 않은 저장소는 hook 경로를 살펴보지 않고 넘어가요.
+    if (git(root, ['config', '--local', '--get', HOOK_DECISION_KEY]) === 'declined'
+        && git(root, ['config', '--get', 'core.hooksPath']) !== hooks.directory) {
+      io.stdout.write(declinedHint);
+      return 0;
+    }
     plan = await inspectGitHooks(root, hooks);
   } catch (error) {
     // 문서는 이미 처리했으므로 선택 단계의 검사 오류가 init의 결과를 바꾸지 않게 해요.
