@@ -1066,3 +1066,47 @@ test('the pre-push hook skips tag and deletion pushes and blocks a branch push w
   assert.match(branch.stderr, /claude 명령을 찾을 수 없어요/u);
   assert.match(branch.stderr, /--no-verify/u);
 });
+
+test('hooks keeps active hooks in .git/hooks such as Git LFS running', async (t) => {
+  const root = gitRepository(t);
+  const defaultHooks = path.join(root, '.git', 'hooks');
+  fs.writeFileSync(path.join(defaultHooks, 'pre-push'), '#!/bin/sh\ngit lfs pre-push "$@"\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(defaultHooks, 'post-checkout'), '#!/bin/sh\ngit lfs post-checkout "$@"\n', { mode: 0o755 });
+
+  const result = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(result.code, 2);
+  assert.match(result.output, /CONFLICT\s+core\.hooksPath/u);
+  assert.match(result.output, /\.git\/hooks에 사용 중인 hook\(post-checkout, pre-push\)/u);
+  assert.equal(gitConfig(root, 'core.hooksPath'), null);
+  assert.equal(fs.existsSync(path.join(root, '.githooks')), false);
+  assert.equal(fs.existsSync(path.join(root, '.gitignore')), false);
+
+  const init = await invoke(['init', 'ios-uikit', '--target', root], { tty: true, confirm: true, confirmHooks: true });
+  assert.equal(init.code, 0, init.errors);
+  assert.deepEqual(init.asked, ['docs']);
+  assert.match(init.output, /안내: git hook을 설정하지 않았어요/u);
+  assert.equal(gitConfig(root, 'core.hooksPath'), null);
+});
+
+test('an error in the optional hook check does not change the init result', async (t) => {
+  const root = gitRepository(t);
+  const shared = path.join(project(t), 'gitignore');
+  fs.writeFileSync(shared, 'DerivedData/\n');
+  fs.symlinkSync(shared, path.join(root, '.gitignore'));
+
+  const dryRun = await invoke(['init', 'ios-uikit', '--target', root, '--dry-run']);
+  assert.equal(dryRun.code, 0, dryRun.errors);
+  assert.match(dryRun.output, /git hook 단계를 건너뛰었어요/u);
+
+  const applied = await invoke(['init', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(applied.code, 0, applied.errors);
+  assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), true);
+  assert.match(applied.output, /git hook 단계를 건너뛰었어요/u);
+  assert.equal(fs.readFileSync(shared, 'utf8'), 'DerivedData/\n');
+
+  execFileSync('git', ['-C', root, 'config', '--local', 'project-docs.gitHooks', 'declined']);
+  const declined = await invoke(['init', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(declined.code, 0, declined.errors);
+  assert.doesNotMatch(declined.output, /건너뛰었어요/u);
+  assert.match(declined.output, /거절한 기록이 있어 묻지 않았어요/u);
+});

@@ -68,7 +68,7 @@ Git 작업 흐름과 RxSwift 문서를 포함한 현재 문서 15개는 모두 �
 - 사용자의 명시적 요청 없이 이슈나 `.github/PULL_REQUEST_TEMPLATE.md`를 만들지 않아요.
 - 전역 명령어 설치, npm 레지스트리 게시, 원격 사용자 템플릿 로딩은 포함하지 않아요.
 - 앱 소스, Xcode 프로젝트, CI 설정 또는 대상 프로젝트의 `package.json`을 생성·수정하지 않아요. 예외로, 사용자가 git hook 설정을 승낙하면 `.gitignore`에 한 줄을 추가하고 로컬 git 설정(`core.hooksPath`와 `project-docs.*`)만 바꿔요.
-- 이미 다른 hook 경로(husky 등)를 쓰거나 `.githooks/`를 커밋해 둔 저장소의 hook 설정을 바꾸지 않아요.
+- 이미 다른 hook 경로(husky 등)를 쓰거나, `.githooks/`를 커밋해 뒀거나, `.git/hooks`에 사용 중인 hook(Git LFS 등)이 있는 저장소의 hook 설정을 바꾸지 않아요. 기존 hook과 연결(chaining)하는 기능은 이번 범위에 넣지 않아요.
 - `npx skills add`로 문서 키트를 스킬처럼 설치하지 않아요. 실행 경험만 비슷하게 제공해요.
 
 ## 계획
@@ -166,7 +166,7 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-
 | `hooks` 명령 | 거절 기록과 관계없이 hook 단계만 실행하고, 적용하면 거절 기록을 지워요. |
 | git 저장소가 아니거나 하위 디렉터리 | `init`은 hook 단계를 조용히 건너뛰고, `hooks`는 오류로 끝나요. |
 
-hook 단계는 파일별 상태에 `SET`(`core.hooksPath` 설정)과 `ADD`(`.gitignore` 규칙 추가), `CONFLICT`를 더해요. hook 파일은 없으면 `CREATE`, 템플릿과 같으면 `UNCHANGED`예요. 다르면 로컬 git 설정 `project-docs.pre-push.hash`와 비교해 `UPDATE` 또는 `SKIP_MODIFIED`로 판단해요. `.gitignore`는 `git check-ignore --no-index`로 이미 무시되는지 확인하고, 아니면 기존 내용 뒤에 규칙을 추가해요. `core.hooksPath`가 다른 경로이거나 `.githooks/`에 추적 중인 파일이 있으면 `CONFLICT`로 표시하고 아무것도 바꾸지 않아요. `init`에서는 hook 단계의 결과가 문서의 종료 코드를 바꾸지 않아요. `hooks` 명령에서는 충돌이나 보존이 있으면 종료 코드 `2`를 반환해요.
+hook 단계는 파일별 상태에 `SET`(`core.hooksPath` 설정)과 `ADD`(`.gitignore` 규칙 추가), `CONFLICT`를 더해요. hook 파일은 없으면 `CREATE`, 템플릿과 같으면 `UNCHANGED`예요. 다르면 로컬 git 설정 `project-docs.pre-push.hash`와 비교해 `UPDATE` 또는 `SKIP_MODIFIED`로 판단해요. `.gitignore`는 `git check-ignore --no-index`로 이미 무시되는지 확인하고, 아니면 기존 내용 뒤에 규칙을 추가해요. `core.hooksPath`가 다른 경로이거나 `.githooks/`에 추적 중인 파일이 있으면 `CONFLICT`로 표시하고 아무것도 바꾸지 않아요. `core.hooksPath`를 새로 설정해야 하는데 `.git/hooks`에 `.sample`이 아닌 hook이 있어도 `CONFLICT`예요. `core.hooksPath`를 바꾸면 Git LFS의 `pre-push` 같은 기존 hook이 소리 없이 꺼지기 때문이에요. `init`에서는 hook 단계의 결과가 문서의 종료 코드를 바꾸지 않아요. hook 경로 검사에서 오류가 나도 안내 한 줄만 보여주고, 거절 기록이 있으면 hook 경로를 검사하지 않아요. `hooks` 명령에서는 충돌이나 보존이 있으면 종료 코드 `2`를 반환해요.
 
 ### 프로젝트 적용 예시
 
@@ -333,5 +333,6 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
   - [x] 13-1. `kit.json`의 `gitHooks`와 `githooks/pre-push.tmpl`을 추가하고 패키지에 포함해요.
   - [x] 13-2. `init`은 터미널에서 문서 단계 뒤 한 번 묻고, 거절은 로컬 git 설정에 기록해 다시 묻지 않아요.
   - [x] 13-3. `hooks ios-uikit` 명령으로 hook 단계만 미리 보거나 적용해요.
-  - [x] 13-4. 수정하지 않은 hook만 갱신하고, 다른 `core.hooksPath`나 커밋된 `.githooks/`는 바꾸지 않는 테스트가 통과해요.
+  - [x] 13-4. 수정하지 않은 hook만 갱신하고, 다른 `core.hooksPath`, 커밋된 `.githooks/`, `.git/hooks`의 사용 중인 hook이 있으면 바꾸지 않는 테스트가 통과해요.
+  - [x] 13-6. hook 검사 오류가 `init`의 문서 적용 결과와 종료 코드를 바꾸지 않는 테스트가 통과해요.
   - [x] 13-5. `AGENTS.md`가 hook이 없는 저장소에서 사용자 승낙 뒤 설정하도록 안내하고, `gitflow.md`와 README에 동작을 적어요.

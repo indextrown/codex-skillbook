@@ -498,6 +498,22 @@ async function loadGitHooks() {
   return { directory: config.directory, files };
 }
 
+async function activeDefaultHooks(root) {
+  const commonDirectory = git(root, ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+  if (!commonDirectory) return [];
+  let entries;
+  try {
+    entries = await fs.readdir(path.join(commonDirectory, 'hooks'), { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+  return entries
+    .filter((entry) => !entry.isDirectory() && !entry.name.endsWith('.sample'))
+    .map((entry) => entry.name)
+    .sort();
+}
+
 // hook은 개인 설정이라 커밋되는 manifest 대신 저장소의 로컬 git 설정에 상태를 기록해요.
 async function inspectGitHooks(root, hooks) {
   const topLevel = git(root, ['rev-parse', '--show-toplevel']);
@@ -538,6 +554,13 @@ async function inspectGitHooks(root, hooks) {
   else if (hooksPath) {
     hooksPathStatus = 'CONFLICT';
     conflicts.push(`core.hooksPath가 이미 ${hooksPath}(으)로 설정돼 있어요. 다른 hook 설정을 덮어쓰지 않아요.`);
+  } else {
+    // core.hooksPath를 바꾸면 .git/hooks는 더 이상 실행되지 않아요. Git LFS의 pre-push 같은 hook이 꺼지지 않게 막아요.
+    const activeHooks = await activeDefaultHooks(root);
+    if (activeHooks.length > 0) {
+      hooksPathStatus = 'CONFLICT';
+      conflicts.push(`.git/hooks에 사용 중인 hook(${activeHooks.join(', ')})이 있어요. core.hooksPath를 바꾸면 이 hook이 꺼져서 설정하지 않아요.`);
+    }
   }
   items.push({ kind: 'hooksPath', status: hooksPathStatus, label: `core.hooksPath = ${hooksPath || hooks.directory}` });
 
@@ -638,7 +661,22 @@ function printHookResults(io, results) {
 
 // init 뒤에 이어지는 선택 단계예요. hook을 요청하지 않은 사용자의 종료 코드는 바꾸지 않아요.
 async function offerGitHooks(root, options, io) {
-  const plan = await inspectGitHooks(root, await loadGitHooks());
+  const hooks = await loadGitHooks();
+  const declinedHint = `안내: git hook 설정을 거절한 기록이 있어 묻지 않았어요. 설정하려면 ${HOOK_COMMAND}을 실행해요.\n`;
+  // 거절했고 아직 설정하지 않은 저장소는 hook 경로를 살펴보지 않고 넘어가요.
+  if (git(root, ['config', '--local', '--get', HOOK_DECISION_KEY]) === 'declined'
+      && git(root, ['config', '--get', 'core.hooksPath']) !== hooks.directory) {
+    io.stdout.write(declinedHint);
+    return 0;
+  }
+  let plan;
+  try {
+    plan = await inspectGitHooks(root, hooks);
+  } catch (error) {
+    // 문서는 이미 처리했으므로 선택 단계의 검사 오류가 init의 결과를 바꾸지 않게 해요.
+    io.stdout.write(`안내: git hook 단계를 건너뛰었어요. ${error.message}\n`);
+    return 0;
+  }
   if (!plan.available || (!hookPlanIsActionable(plan) && plan.conflicts.length === 0)) return 0;
   if (plan.conflicts.length > 0) {
     for (const conflict of plan.conflicts) io.stdout.write(`안내: git hook을 설정하지 않았어요. ${conflict}\n`);
@@ -649,7 +687,7 @@ async function offerGitHooks(root, options, io) {
     return 0;
   }
   if (!plan.configured && plan.decision === 'declined') {
-    io.stdout.write(`안내: git hook 설정을 거절한 기록이 있어 묻지 않았어요. 설정하려면 ${HOOK_COMMAND}을 실행해요.\n`);
+    io.stdout.write(declinedHint);
     return 0;
   }
   if (options.apply || !io.stdin.isTTY || !io.stdout.isTTY) {

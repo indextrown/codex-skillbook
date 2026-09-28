@@ -178,7 +178,7 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-
 | 승낙 | `.githooks/pre-push`를 만들고 `git config core.hooksPath .githooks`를 설정한 뒤 `.gitignore`에 `.githooks/`를 추가해요. 개인 설정이라 hook 파일은 커밋하지 않아요. |
 | 거절 | `git config project-docs.gitHooks declined`로 기록하고 `init`에서 다시 묻지 않아요. |
 | `--apply`(비대화형) | hook은 설정하지 않고 위 명령만 안내해요. 질문 없이 설정하려면 `hooks ios-uikit --apply`를 써요. |
-| 다른 hook 설정이 있음 | `core.hooksPath`가 다른 경로이거나 `.githooks/`가 이미 커밋돼 있으면 바꾸지 않아요. |
+| 다른 hook 설정이 있음 | `core.hooksPath`가 다른 경로이거나, `.githooks/`가 이미 커밋돼 있거나, `.git/hooks`에 사용 중인 hook(Git LFS 등)이 있으면 바꾸지 않아요. `core.hooksPath`를 바꾸면 `.git/hooks`가 더 이상 실행되지 않기 때문이에요. |
 
 hook을 갱신할지 판단하는 해시는 커밋되는 `.project-docs/manifest.json`이 아니라 로컬 git 설정(`project-docs.pre-push.hash`)에 저장해요. 수정하지 않은 hook만 최신 템플릿으로 갱신하고, 직접 고친 hook은 `SKIP_MODIFIED`로 보존해요. 리뷰에는 로그인한 `claude` CLI, `jq`, `perl`이 필요하고 push마다 API 비용이 들어요.
 

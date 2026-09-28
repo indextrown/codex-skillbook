@@ -132,7 +132,7 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-
 | 마지막 원본 출력 | 리뷰는 `.git/claude-review-last.json`, 판정은 `.git/claude-review-verdict.json` |
 | 거절 기록 | 설정을 거절하면 `git config project-docs.gitHooks declined`로 남기고 다시 묻지 않아요. `hooks` 명령은 기록과 관계없이 실행돼요. |
 
-이미 다른 hook 경로(husky 등)를 쓰거나 `.githooks/`를 커밋해 둔 저장소에서는 설정을 바꾸지 않아요. 한 번 push에 수십 초에서 몇 분이 걸리고 API 비용이 들어요.
+이미 다른 hook 경로(husky 등)를 쓰거나, `.githooks/`를 커밋해 뒀거나, `.git/hooks`에 사용 중인 hook(Git LFS 등)이 있는 저장소에서는 설정을 바꾸지 않아요. `core.hooksPath`를 바꾸면 `.git/hooks`가 더 이상 실행되지 않기 때문이에요. 한 번 push에 수십 초에서 몇 분이 걸리고 API 비용이 들어요.
 
 ### 7. PR을 만들고 리뷰를 요청해요
 
