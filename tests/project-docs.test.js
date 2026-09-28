@@ -9,6 +9,10 @@ const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
 const { relativeSegments, run } = require('../bin/project-docs.js');
 
+// 사용자 전역 git 설정(core.hooksPath 등)이 테스트 결과에 섞이지 않게 해요.
+process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+process.env.GIT_CONFIG_NOSYSTEM = '1';
+
 function sha256(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
@@ -23,18 +27,37 @@ function project(t) {
   return root;
 }
 
-async function invoke(args, { tty = false, confirm = false } = {}) {
+async function invoke(args, { tty = false, confirm = false, confirmHooks = false } = {}) {
   let output = '';
   let errors = '';
+  const asked = [];
   const io = {
     stdin: { isTTY: tty },
     stdout: { isTTY: tty, write: (chunk) => { output += chunk; } },
     stderr: { write: (chunk) => { errors += chunk; } },
-    confirm: async () => confirm,
+    confirm: async (kind) => {
+      asked.push(kind);
+      return kind === 'hooks' ? confirmHooks : confirm;
+    },
   };
   const code = await run(args, io);
-  return { code, output, errors };
+  return { code, output, errors, asked };
 }
+
+function gitRepository(t) {
+  const root = project(t);
+  execFileSync('git', ['init', '-q', '-b', 'main', root]);
+  return fs.realpathSync(root);
+}
+
+function gitConfig(root, key) {
+  const result = spawnSync('git', ['-C', root, 'config', '--local', '--get', key], { encoding: 'utf8' });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+const HOOK_TEMPLATE = fs.readFileSync(
+  path.resolve(__dirname, '..', 'project-doc-kits', 'ios-uikit', 'githooks', 'pre-push.tmpl'),
+);
 
 test('--dry-run previews all fifteen required files without changing the project', async (t) => {
   const root = project(t);
@@ -777,6 +800,7 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/development/korean-editing.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/development/examples/korean-editing-examples.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/development/examples/pr-writing-examples.md.tmpl'));
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/githooks/pre-push.tmpl'));
   assert.equal(packagedPaths.some((file) => file.startsWith('skills/') || file.startsWith('docs/')), false);
 
   const archive = JSON.parse(execFileSync('npm', ['pack', '--pack-destination', packDirectory, '--json'], {
@@ -820,9 +844,303 @@ test('README remote examples use the repository package and explicit executable'
     .split('\n')
     .filter((line) => line.startsWith('npx ') && line.includes('--package=github:indextrown/codex-skillbook'));
 
-  assert.equal(remoteCommands.length, 3);
+  assert.equal(remoteCommands.length, 4);
   for (const command of remoteCommands) {
     assert.ok(command.startsWith(expectedPrefix), command);
   }
   assert.doesNotMatch(readme, /--package=github:indextrown\/codex-skillbook#/u);
+});
+
+test('hooks --dry-run previews the personal git hook setup without changing the repository', async (t) => {
+  const root = gitRepository(t);
+  const result = await invoke(['hooks', 'ios-uikit', '--target', root, '--dry-run']);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /CREATE\s+\.githooks\/pre-push/u);
+  assert.match(result.output, /SET\s+core\.hooksPath = \.githooks/u);
+  assert.match(result.output, /ADD\s+\.gitignore \+= \.githooks\//u);
+  assert.deepEqual(fs.readdirSync(root), ['.git']);
+  assert.equal(gitConfig(root, 'core.hooksPath'), null);
+});
+
+test('hooks --apply installs an executable ignored hook and re-running changes nothing', async (t) => {
+  const root = gitRepository(t);
+  fs.writeFileSync(path.join(root, '.gitignore'), 'DerivedData/');
+  const first = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+
+  assert.equal(first.code, 0, first.errors);
+  const hook = path.join(root, '.githooks', 'pre-push');
+  assert.deepEqual(fs.readFileSync(hook), HOOK_TEMPLATE);
+  assert.equal(fs.statSync(hook).mode & 0o111, 0o111);
+  assert.equal(gitConfig(root, 'core.hooksPath'), '.githooks');
+  assert.equal(gitConfig(root, 'project-docs.pre-push.hash'), sha256(HOOK_TEMPLATE));
+  assert.equal(
+    fs.readFileSync(path.join(root, '.gitignore'), 'utf8'),
+    'DerivedData/\n\n# 프로젝트 문서 키트의 개인용 git hook\n.githooks/\n',
+  );
+  const status = execFileSync('git', ['-C', root, 'status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8' });
+  assert.equal(status, '?? .gitignore\n');
+  assert.equal(fs.existsSync(manifestPath(root)), false);
+
+  const gitignoreBefore = fs.readFileSync(path.join(root, '.gitignore'));
+  const second = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(second.code, 0, second.errors);
+  assert.match(second.output, /UNCHANGED\s+\.githooks\/pre-push/u);
+  assert.match(second.output, /적용할 변경이 없어요/u);
+  assert.deepEqual(fs.readFileSync(path.join(root, '.gitignore')), gitignoreBefore);
+});
+
+test('init asks once about the git hook after applying documents and installs it when accepted', async (t) => {
+  const root = gitRepository(t);
+  const result = await invoke(['init', 'ios-uikit', '--target', root], {
+    tty: true, confirm: true, confirmHooks: true,
+  });
+
+  assert.equal(result.code, 0, result.errors);
+  assert.deepEqual(result.asked, ['docs', 'hooks']);
+  assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), true);
+  assert.equal(fs.existsSync(path.join(root, '.githooks', 'pre-push')), true);
+  assert.equal(gitConfig(root, 'core.hooksPath'), '.githooks');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(Object.keys(manifest.files).some((target) => target.startsWith('.githooks/')), false);
+
+  const again = await invoke(['init', 'ios-uikit', '--target', root], { tty: true, confirm: true, confirmHooks: true });
+  assert.equal(again.code, 0, again.errors);
+  assert.deepEqual(again.asked, []);
+  assert.doesNotMatch(again.output, /git hook/u);
+});
+
+test('declining the git hook question is remembered until hooks is run explicitly', async (t) => {
+  const root = gitRepository(t);
+  const declined = await invoke(['init', 'ios-uikit', '--target', root], { tty: true, confirm: true });
+
+  assert.equal(declined.code, 0, declined.errors);
+  assert.deepEqual(declined.asked, ['docs', 'hooks']);
+  assert.match(declined.output, /다시 묻지 않아요/u);
+  assert.equal(fs.existsSync(path.join(root, '.githooks')), false);
+  assert.equal(fs.existsSync(path.join(root, '.gitignore')), false);
+  assert.equal(gitConfig(root, 'core.hooksPath'), null);
+  assert.equal(gitConfig(root, 'project-docs.gitHooks'), 'declined');
+
+  const rerun = await invoke(['init', 'ios-uikit', '--target', root], { tty: true, confirm: true, confirmHooks: true });
+  assert.deepEqual(rerun.asked, []);
+  assert.match(rerun.output, /거절한 기록이 있어 묻지 않았어요/u);
+  assert.match(rerun.output, /project-docs hooks ios-uikit/u);
+
+  const explicit = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(explicit.code, 0, explicit.errors);
+  assert.equal(gitConfig(root, 'core.hooksPath'), '.githooks');
+  assert.equal(gitConfig(root, 'project-docs.gitHooks'), null);
+});
+
+test('init --apply leaves git hooks untouched and prints the setup command', async (t) => {
+  const root = gitRepository(t);
+  const result = await invoke(['init', 'ios-uikit', '--target', root, '--apply']);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.deepEqual(result.asked, []);
+  assert.match(result.output, /npx --yes --package=github:indextrown\/codex-skillbook -- project-docs hooks ios-uikit/u);
+  assert.equal(fs.existsSync(path.join(root, '.githooks')), false);
+  assert.equal(gitConfig(root, 'core.hooksPath'), null);
+  assert.equal(gitConfig(root, 'project-docs.gitHooks'), null);
+});
+
+test('init outside a git repository does not mention git hooks', async (t) => {
+  const root = project(t);
+  const result = await invoke(['init', 'ios-uikit', '--target', root], { tty: true, confirm: true, confirmHooks: true });
+
+  assert.equal(result.code, 0, result.errors);
+  assert.deepEqual(result.asked, ['docs']);
+  assert.doesNotMatch(result.output, /git hook/u);
+});
+
+test('hooks updates an unmodified older hook and preserves an edited one', async (t) => {
+  const root = gitRepository(t);
+  await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  const hook = path.join(root, '.githooks', 'pre-push');
+
+  const older = '#!/usr/bin/env bash\n# older kit hook\nexit 0\n';
+  fs.writeFileSync(hook, older);
+  execFileSync('git', ['-C', root, 'config', '--local', 'project-docs.pre-push.hash', sha256(older)]);
+  const updated = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(updated.code, 0, updated.errors);
+  assert.match(updated.output, /UPDATE\s+\.githooks\/pre-push/u);
+  assert.deepEqual(fs.readFileSync(hook), HOOK_TEMPLATE);
+  assert.equal(fs.statSync(hook).mode & 0o111, 0o111);
+
+  const edited = `${HOOK_TEMPLATE.toString('utf8')}\n# my local tweak\n`;
+  fs.writeFileSync(hook, edited);
+  const preserved = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(preserved.code, 2);
+  assert.match(preserved.output, /SKIP_MODIFIED\s+\.githooks\/pre-push/u);
+  assert.equal(fs.readFileSync(hook, 'utf8'), edited);
+});
+
+test('hooks does not override another hooksPath or a committed .githooks directory', async (t) => {
+  const huskyRoot = gitRepository(t);
+  execFileSync('git', ['-C', huskyRoot, 'config', '--local', 'core.hooksPath', '.husky/_']);
+  const husky = await invoke(['hooks', 'ios-uikit', '--target', huskyRoot, '--apply']);
+  assert.equal(husky.code, 2);
+  assert.match(husky.output, /CONFLICT\s+core\.hooksPath = \.husky\/_/u);
+  assert.equal(gitConfig(huskyRoot, 'core.hooksPath'), '.husky/_');
+  assert.deepEqual(fs.readdirSync(huskyRoot), ['.git']);
+
+  const sharedRoot = gitRepository(t);
+  fs.mkdirSync(path.join(sharedRoot, '.githooks'));
+  fs.writeFileSync(path.join(sharedRoot, '.githooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
+  execFileSync('git', ['-C', sharedRoot, 'add', '.githooks/pre-commit']);
+  const shared = await invoke(['hooks', 'ios-uikit', '--target', sharedRoot, '--apply']);
+  assert.equal(shared.code, 2);
+  assert.match(shared.output, /이미 저장소에 커밋돼 있어요/u);
+  assert.equal(fs.existsSync(path.join(sharedRoot, '.githooks', 'pre-push')), false);
+  assert.equal(fs.existsSync(path.join(sharedRoot, '.gitignore')), false);
+  assert.equal(gitConfig(sharedRoot, 'core.hooksPath'), null);
+});
+
+test('hooks requires the root of a git repository and rejects a symlinked .gitignore', async (t) => {
+  const plain = project(t);
+  const outside = await invoke(['hooks', 'ios-uikit', '--target', plain, '--apply']);
+  assert.equal(outside.code, 1);
+  assert.match(outside.errors, /git 저장소가 아니라서/u);
+
+  const root = gitRepository(t);
+  const nested = path.join(root, 'App');
+  fs.mkdirSync(nested);
+  const subdirectory = await invoke(['hooks', 'ios-uikit', '--target', nested, '--apply']);
+  assert.equal(subdirectory.code, 1);
+  assert.match(subdirectory.errors, /저장소 루트에서만/u);
+  assert.equal(fs.existsSync(path.join(nested, '.githooks')), false);
+
+  const other = path.join(project(t), 'gitignore');
+  fs.writeFileSync(other, 'secret\n');
+  fs.symlinkSync(other, path.join(root, '.gitignore'));
+  const symlinked = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(symlinked.code, 1);
+  assert.match(symlinked.errors, /심볼릭 링크/u);
+  assert.equal(fs.readFileSync(other, 'utf8'), 'secret\n');
+  assert.equal(fs.existsSync(path.join(root, '.githooks')), false);
+});
+
+test('hooks rejects init-only options', async () => {
+  const result = await invoke(['hooks', 'ios-uikit', '--project-name', 'MyUIKitApp']);
+  assert.equal(result.code, 1);
+  assert.match(result.errors, /알 수 없는 옵션이에요: --project-name/u);
+});
+
+test('the pre-push hook skips tag and deletion pushes and blocks a branch push without claude', (t) => {
+  const remote = project(t);
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote]);
+  const root = gitRepository(t);
+  const commit = (message) => execFileSync('git', [
+    '-C', root, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+    'commit', '-q', '--allow-empty', '-m', message,
+  ]);
+  fs.writeFileSync(path.join(root, 'README.md'), '# App\n');
+  execFileSync('git', ['-C', root, 'add', 'README.md']);
+  commit('first');
+  execFileSync('git', ['-C', root, 'remote', 'add', 'origin', remote]);
+  execFileSync('git', ['-C', root, 'push', '-q', 'origin', 'main']);
+  execFileSync('git', ['-C', root, 'switch', '-q', '-c', 'feature/profile']);
+  fs.writeFileSync(path.join(root, 'README.md'), '# App\n\nProfile\n');
+  execFileSync('git', ['-C', root, 'add', 'README.md']);
+  commit('feature');
+  const head = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const zero = '0'.repeat(head.length);
+
+  const hook = path.join(project(t), 'pre-push');
+  fs.writeFileSync(hook, HOOK_TEMPLATE, { mode: 0o755 });
+  // claude가 없는 PATH에서 실행해 리뷰가 필요한 push만 막히는지 확인해요.
+  const runHook = (input) => spawnSync('bash', [hook, 'origin', remote], {
+    cwd: root,
+    input,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: '/usr/bin:/bin' },
+  });
+
+  const tag = runHook(`refs/tags/v1 ${head} refs/tags/v1 ${zero}\n`);
+  assert.equal(tag.status, 0, tag.stderr);
+  const deletion = runHook(`(delete) ${zero} refs/heads/old ${head}\n`);
+  assert.equal(deletion.status, 0, deletion.stderr);
+  const branch = runHook(`refs/heads/feature/profile ${head} refs/heads/feature/profile ${zero}\n`);
+  assert.equal(branch.status, 1);
+  assert.match(branch.stderr, /claude 명령을 찾을 수 없어요/u);
+  assert.match(branch.stderr, /--no-verify/u);
+});
+
+test('hooks keeps active hooks in .git/hooks such as Git LFS running', async (t) => {
+  const root = gitRepository(t);
+  const defaultHooks = path.join(root, '.git', 'hooks');
+  fs.writeFileSync(path.join(defaultHooks, 'pre-push'), '#!/bin/sh\ngit lfs pre-push "$@"\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(defaultHooks, 'post-checkout'), '#!/bin/sh\ngit lfs post-checkout "$@"\n', { mode: 0o755 });
+
+  const result = await invoke(['hooks', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(result.code, 2);
+  assert.match(result.output, /CONFLICT\s+core\.hooksPath/u);
+  assert.match(result.output, /\.git\/hooks에 사용 중인 hook\(post-checkout, pre-push\)/u);
+  assert.equal(gitConfig(root, 'core.hooksPath'), null);
+  assert.equal(fs.existsSync(path.join(root, '.githooks')), false);
+  assert.equal(fs.existsSync(path.join(root, '.gitignore')), false);
+
+  const init = await invoke(['init', 'ios-uikit', '--target', root], { tty: true, confirm: true, confirmHooks: true });
+  assert.equal(init.code, 0, init.errors);
+  assert.deepEqual(init.asked, ['docs']);
+  assert.match(init.output, /안내: git hook을 설정하지 않았어요/u);
+  assert.equal(gitConfig(root, 'core.hooksPath'), null);
+});
+
+test('an error in the optional hook check does not change the init result', async (t) => {
+  const root = gitRepository(t);
+  const shared = path.join(project(t), 'gitignore');
+  fs.writeFileSync(shared, 'DerivedData/\n');
+  fs.symlinkSync(shared, path.join(root, '.gitignore'));
+
+  const dryRun = await invoke(['init', 'ios-uikit', '--target', root, '--dry-run']);
+  assert.equal(dryRun.code, 0, dryRun.errors);
+  assert.match(dryRun.output, /git hook 단계를 건너뛰었어요/u);
+
+  const applied = await invoke(['init', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(applied.code, 0, applied.errors);
+  assert.equal(fs.existsSync(path.join(root, 'AGENTS.md')), true);
+  assert.match(applied.output, /git hook 단계를 건너뛰었어요/u);
+  assert.equal(fs.readFileSync(shared, 'utf8'), 'DerivedData/\n');
+
+  execFileSync('git', ['-C', root, 'config', '--local', 'project-docs.gitHooks', 'declined']);
+  const declined = await invoke(['init', 'ios-uikit', '--target', root, '--apply']);
+  assert.equal(declined.code, 0, declined.errors);
+  assert.doesNotMatch(declined.output, /건너뛰었어요/u);
+  assert.match(declined.output, /거절한 기록이 있어 묻지 않았어요/u);
+});
+
+test('the pre-push hook reviews unpushed commits when the default branch cannot be found', (t) => {
+  const remote = project(t);
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote]);
+  const root = gitRepository(t);
+  const commit = (message) => execFileSync('git', [
+    '-C', root, '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+    'commit', '-q', '--allow-empty', '-m', message,
+  ]);
+  commit('first');
+  // origin이 없고 upstream만 fetch된 저장소에서 URL로 push하는 경우예요.
+  execFileSync('git', ['-C', root, 'push', '-q', remote, 'main']);
+  execFileSync('git', ['-C', root, 'remote', 'add', 'upstream', remote]);
+  execFileSync('git', ['-C', root, 'fetch', '-q', 'upstream']);
+  execFileSync('git', ['-C', root, 'switch', '-q', '-c', 'feature/profile']);
+  fs.writeFileSync(path.join(root, 'Profile.swift'), 'struct Profile {}\n');
+  execFileSync('git', ['-C', root, 'add', 'Profile.swift']);
+  commit('feature');
+  const head = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+
+  const hook = path.join(project(t), 'pre-push');
+  fs.writeFileSync(hook, HOOK_TEMPLATE, { mode: 0o755 });
+  const result = spawnSync('bash', [hook, remote, remote], {
+    cwd: root,
+    input: `refs/heads/feature/profile ${head} refs/heads/feature/profile ${'0'.repeat(head.length)}\n`,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: '/usr/bin:/bin' },
+  });
+
+  // 범위를 정한 뒤 도구 확인에서 멈춰야 해요. 공통 조상 오류로 막히면 안 돼요.
+  assert.equal(result.status, 1);
+  assert.doesNotMatch(result.stderr, /공통 조상/u);
+  assert.match(result.stderr, /claude 명령을 찾을 수 없어요/u);
 });

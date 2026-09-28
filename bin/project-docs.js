@@ -4,6 +4,7 @@
 
 const fs = require('node:fs/promises');
 const { constants } = require('node:fs');
+const { execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const path = require('node:path');
 const readline = require('node:readline/promises');
@@ -14,10 +15,22 @@ const MANIFEST_SEGMENTS = ['.project-docs', 'manifest.json'];
 const SUPPORTED_INCLUDES = new Set(['gitflow', 'rxswift']);
 const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'DELETE', 'RETIRED']);
 const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED', 'SKIP_RETIRED_MODIFIED']);
+const HOOK_ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'SET', 'ADD']);
+const HOOK_DECISION_KEY = 'project-docs.gitHooks';
+const HOOK_COMMAND = 'npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit';
+const COMMAND_OPTIONS = {
+  init: ['--target', '--project-name', '--include', '--dry-run', '--apply'],
+  hooks: ['--target', '--dry-run', '--apply'],
+};
 
 const USAGE = `사용법:
   project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
                               [--dry-run | --apply]
+  project-docs hooks ios-uikit [--target /absolute/path] [--dry-run | --apply]
+
+명령:
+  init   문서 키트를 적용해요. 터미널에서는 git hook 설정 여부도 한 번 물어요.
+  hooks  push 전 Claude 코드 리뷰 git hook만 설정해요.
 
 옵션:
   --target        대상 프로젝트의 절대 경로 (기본값: 현재 디렉터리)
@@ -34,15 +47,16 @@ function parseArguments(args) {
   if (args.includes('--help') || args.includes('-h')) {
     return { help: true };
   }
-  if (args[0] !== 'init' || args[1] !== KIT_NAME) {
-    throw new Error(`지원하는 명령은 "init ${KIT_NAME}"뿐이에요.\n${USAGE}`);
+  if (!Object.hasOwn(COMMAND_OPTIONS, args[0]) || args[1] !== KIT_NAME) {
+    throw new Error(`지원하는 명령은 "init ${KIT_NAME}"과 "hooks ${KIT_NAME}"뿐이에요.\n${USAGE}`);
   }
 
-  const options = { dryRun: false, apply: false, include: new Set() };
+  const options = { command: args[0], dryRun: false, apply: false, include: new Set() };
+  const allowedFlags = COMMAND_OPTIONS[options.command];
   const seen = new Set();
   for (let index = 2; index < args.length; index += 1) {
     const flag = args[index];
-    if (!['--target', '--project-name', '--include', '--dry-run', '--apply'].includes(flag)) {
+    if (!allowedFlags.includes(flag)) {
       throw new Error(`알 수 없는 옵션이에요: ${flag}`);
     }
     if (seen.has(flag) && flag !== '--include') {
@@ -431,6 +445,310 @@ async function writeManifest(root, manifest, files) {
   await writeAtomically(manifest.destination, content);
 }
 
+function git(root, args) {
+  try {
+    return execFileSync('git', ['-C', root, ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  } catch (error) {
+    if (error.code === 'ENOENT' || typeof error.status === 'number') return null;
+    throw error;
+  }
+}
+
+function gitOrThrow(root, args) {
+  const output = git(root, args);
+  if (output === null) throw new Error(`git ${args.join(' ')} 명령이 실패했어요.`);
+  return output;
+}
+
+async function loadGitHooks() {
+  const manifest = JSON.parse(await fs.readFile(path.join(KIT_DIRECTORY, 'kit.json'), 'utf8'));
+  const config = manifest.gitHooks;
+  if (!config || typeof config !== 'object' || !Array.isArray(config.files)) {
+    throw new Error('키트의 git hook 설정을 읽을 수 없어요.');
+  }
+  const directorySegments = relativeSegments(config.directory, 'git hook 디렉터리');
+  if (directorySegments.length !== 1) {
+    throw new Error(`git hook 디렉터리는 프로젝트 루트 바로 아래여야 해요: ${config.directory}`);
+  }
+  const kitRoot = await fs.realpath(KIT_DIRECTORY);
+  const files = [];
+  for (const item of config.files) {
+    if (typeof item.name !== 'string' || !/^[a-z][a-z-]*$/u.test(item.name)) {
+      throw new Error(`git hook 이름이 올바르지 않아요: ${item.name}`);
+    }
+    const templatePath = path.join(kitRoot, ...relativeSegments(item.template, 'git hook 템플릿'));
+    const sourceStat = await fs.lstat(templatePath);
+    if (!isWithin(kitRoot, await fs.realpath(templatePath)) || sourceStat.isSymbolicLink() || !sourceStat.isFile()) {
+      throw new Error(`키트 밖의 git hook 템플릿은 읽을 수 없어요: ${item.template}`);
+    }
+    // hook은 셸 스크립트라 자리 표시자를 치환하지 않고 그대로 복사해요.
+    const content = await fs.readFile(templatePath);
+    files.push({
+      name: item.name,
+      target: `${config.directory}/${item.name}`,
+      segments: [...directorySegments, item.name],
+      content,
+      templateHash: contentHash(content),
+      hashKey: `project-docs.${item.name}.hash`,
+    });
+  }
+  return { directory: config.directory, files };
+}
+
+async function activeDefaultHooks(root) {
+  // --path-format=absolute는 git 2.31부터라서, 상대 경로로 받아 대상 루트 기준으로 풀어요.
+  const commonDirectory = git(root, ['rev-parse', '--git-common-dir']);
+  if (!commonDirectory) {
+    throw new Error('.git/hooks 위치를 확인하지 못해서 기존 hook을 보호할 수 없어요.');
+  }
+  let entries;
+  try {
+    entries = await fs.readdir(path.resolve(root, commonDirectory, 'hooks'), { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+  return entries
+    .filter((entry) => !entry.isDirectory() && !entry.name.endsWith('.sample'))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+// hook은 개인 설정이라 커밋되는 manifest 대신 저장소의 로컬 git 설정에 상태를 기록해요.
+async function inspectGitHooks(root, hooks) {
+  const topLevel = git(root, ['rev-parse', '--show-toplevel']);
+  if (!topLevel) {
+    return { available: false, reason: 'git 저장소가 아니라서 git hook을 설정할 수 없어요.' };
+  }
+  if (await fs.realpath(topLevel) !== root) {
+    return { available: false, reason: `git hook은 저장소 루트에서만 설정해요: ${topLevel}` };
+  }
+
+  const items = [];
+  const conflicts = [];
+  const tracked = git(root, ['ls-files', '--', hooks.directory]);
+  if (tracked) {
+    conflicts.push(`${hooks.directory}/가 이미 저장소에 커밋돼 있어요. 개인용 hook으로 바꾸지 않아요.`);
+  }
+
+  for (const file of hooks.files) {
+    await inspectParents(root, file.segments);
+    const destination = path.join(root, ...file.segments);
+    const recordedHash = git(root, ['config', '--local', '--get', file.hashKey]) || undefined;
+    const stats = await lstatOrNull(destination);
+    let status = 'CREATE';
+    if (stats) {
+      if (stats.isSymbolicLink() || !stats.isFile()) {
+        throw new Error(`git hook 경로가 파일이 아니거나 심볼릭 링크예요: ${destination}`);
+      }
+      const existingHash = contentHash(await fs.readFile(destination));
+      if (existingHash === file.templateHash) status = 'UNCHANGED';
+      else status = existingHash === recordedHash ? 'UPDATE' : 'SKIP_MODIFIED';
+    }
+    items.push({ ...file, kind: 'file', destination, recordedHash, status, label: file.target });
+  }
+
+  const hooksPath = git(root, ['config', '--get', 'core.hooksPath']);
+  let hooksPathStatus = 'SET';
+  if (hooksPath === hooks.directory) hooksPathStatus = 'UNCHANGED';
+  else if (hooksPath) {
+    hooksPathStatus = 'CONFLICT';
+    conflicts.push(`core.hooksPath가 이미 ${hooksPath}(으)로 설정돼 있어요. 다른 hook 설정을 덮어쓰지 않아요.`);
+  } else {
+    // core.hooksPath를 바꾸면 .git/hooks는 더 이상 실행되지 않아요. Git LFS의 pre-push 같은 hook이 꺼지지 않게 막아요.
+    const activeHooks = await activeDefaultHooks(root);
+    if (activeHooks.length > 0) {
+      hooksPathStatus = 'CONFLICT';
+      conflicts.push(`.git/hooks에 사용 중인 hook(${activeHooks.join(', ')})이 있어요. core.hooksPath를 바꾸면 이 hook이 꺼져서 설정하지 않아요.`);
+    }
+  }
+  items.push({ kind: 'hooksPath', status: hooksPathStatus, label: `core.hooksPath = ${hooksPath || hooks.directory}` });
+
+  const gitignore = path.join(root, '.gitignore');
+  const gitignoreStat = await lstatOrNull(gitignore);
+  if (gitignoreStat && (gitignoreStat.isSymbolicLink() || !gitignoreStat.isFile())) {
+    throw new Error(`.gitignore가 일반 파일이 아니거나 심볼릭 링크예요: ${gitignore}`);
+  }
+  // check-ignore는 규칙에 맞으면 빈 문자열, 맞지 않으면 null을 돌려줘요.
+  const ignored = git(root, ['check-ignore', '--no-index', '-q', `${hooks.directory}/${hooks.files[0].name}`]) !== null;
+  items.push({
+    kind: 'gitignore',
+    destination: gitignore,
+    status: ignored ? 'UNCHANGED' : 'ADD',
+    label: `.gitignore += ${hooks.directory}/`,
+  });
+
+  const decision = git(root, ['config', '--local', '--get', HOOK_DECISION_KEY]);
+  const configured = hooksPathStatus === 'UNCHANGED'
+    && items.every((item) => item.kind !== 'file' || item.status !== 'CREATE');
+  return { available: true, items, conflicts, decision, configured, directory: hooks.directory };
+}
+
+function hookPlanIsActionable(plan) {
+  return plan.conflicts.length === 0 && plan.items.some((item) => HOOK_ACTIONABLE_STATUSES.has(item.status));
+}
+
+function printHookPlan(io, plan) {
+  io.stdout.write('git hook (push 전 Claude 코드 리뷰, 개인 설정):\n');
+  for (const item of plan.items) io.stdout.write(`${item.status.padEnd(16)} ${item.label}\n`);
+  for (const conflict of plan.conflicts) io.stdout.write(`안내: ${conflict}\n`);
+}
+
+async function writeHookFile(root, item) {
+  await ensureParents(root, item.segments);
+  if (item.status === 'CREATE') {
+    let handle;
+    try {
+      handle = await fs.open(
+        item.destination,
+        constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | (constants.O_NOFOLLOW || 0),
+        0o755,
+      );
+      await handle.writeFile(item.content);
+      await handle.chmod(0o755);
+      return 'CREATE';
+    } catch (error) {
+      if (error.code === 'EEXIST') return 'SKIP_MODIFIED';
+      throw error;
+    } finally {
+      if (handle) await handle.close();
+    }
+  }
+  // 갱신 직전에 다시 읽어 마지막 기록 이후 사용자가 고치지 않았는지 확인해요.
+  const stats = await fs.lstat(item.destination);
+  if (stats.isSymbolicLink() || !stats.isFile()
+      || contentHash(await fs.readFile(item.destination)) !== item.recordedHash) {
+    return 'SKIP_MODIFIED';
+  }
+  await writeAtomically(item.destination, item.content, 0o755);
+  return 'UPDATE';
+}
+
+async function appendGitignore(item, directory) {
+  const existing = (await lstatOrNull(item.destination)) ? await fs.readFile(item.destination, 'utf8') : '';
+  const separator = existing && !existing.endsWith('\n') ? '\n' : '';
+  const block = `${existing ? '\n' : ''}# 프로젝트 문서 키트의 개인용 git hook\n${directory}/\n`;
+  await writeAtomically(item.destination, Buffer.from(`${existing}${separator}${block}`, 'utf8'));
+}
+
+async function applyGitHooks(root, plan) {
+  const results = [];
+  // hook 파일과 .gitignore를 먼저 준비하고, 마지막에 core.hooksPath로 hook을 켜요.
+  for (const item of plan.items.filter((entry) => entry.kind === 'file')) {
+    let status = item.status;
+    if (status === 'CREATE' || status === 'UPDATE') status = await writeHookFile(root, item);
+    if (['CREATE', 'UPDATE', 'UNCHANGED'].includes(status)) {
+      gitOrThrow(root, ['config', '--local', item.hashKey, item.templateHash]);
+    }
+    results.push({ label: item.label, status });
+  }
+  for (const item of plan.items.filter((entry) => entry.kind === 'gitignore')) {
+    if (item.status === 'ADD') await appendGitignore(item, plan.directory);
+    results.push({ label: item.label, status: item.status });
+  }
+  for (const item of plan.items.filter((entry) => entry.kind === 'hooksPath')) {
+    if (item.status === 'SET') gitOrThrow(root, ['config', '--local', 'core.hooksPath', plan.directory]);
+    results.push({ label: `core.hooksPath = ${plan.directory}`, status: item.status });
+  }
+  git(root, ['config', '--local', '--unset', HOOK_DECISION_KEY]);
+  return results;
+}
+
+function printHookResults(io, results) {
+  io.stdout.write('git hook 적용 결과:\n');
+  for (const result of results) io.stdout.write(`${result.status.padEnd(16)} ${result.label}\n`);
+}
+
+// init 뒤에 이어지는 선택 단계예요. hook을 요청하지 않은 사용자의 종료 코드는 바꾸지 않아요.
+async function offerGitHooks(root, options, io) {
+  const declinedHint = `안내: git hook 설정을 거절한 기록이 있어 묻지 않았어요. 설정하려면 ${HOOK_COMMAND}을 실행해요.\n`;
+  let plan;
+  try {
+    const hooks = await loadGitHooks();
+    // 거절했고 아직 설정하지 않은 저장소는 hook 경로를 살펴보지 않고 넘어가요.
+    if (git(root, ['config', '--local', '--get', HOOK_DECISION_KEY]) === 'declined'
+        && git(root, ['config', '--get', 'core.hooksPath']) !== hooks.directory) {
+      io.stdout.write(declinedHint);
+      return 0;
+    }
+    plan = await inspectGitHooks(root, hooks);
+  } catch (error) {
+    // 문서는 이미 처리했으므로 선택 단계의 검사 오류가 init의 결과를 바꾸지 않게 해요.
+    io.stdout.write(`안내: git hook 단계를 건너뛰었어요. ${error.message}\n`);
+    return 0;
+  }
+  if (!plan.available || (!hookPlanIsActionable(plan) && plan.conflicts.length === 0)) return 0;
+  if (plan.conflicts.length > 0) {
+    for (const conflict of plan.conflicts) io.stdout.write(`안내: git hook을 설정하지 않았어요. ${conflict}\n`);
+    return 0;
+  }
+  if (options.dryRun) {
+    printHookPlan(io, plan);
+    return 0;
+  }
+  if (!plan.configured && plan.decision === 'declined') {
+    io.stdout.write(declinedHint);
+    return 0;
+  }
+  if (options.apply || !io.stdin.isTTY || !io.stdout.isTTY) {
+    io.stdout.write(`안내: push 전 Claude 코드 리뷰 git hook은 ${HOOK_COMMAND}으로 설정할 수 있어요.\n`);
+    return 0;
+  }
+
+  printHookPlan(io, plan);
+  const question = plan.configured
+    ? 'git hook 변경을 적용할까요? [y/N] '
+    : 'push 전 Claude 코드 리뷰 git hook을 설정할까요? [y/N] ';
+  if (!(await askConfirmation(io, question, 'hooks'))) {
+    if (!plan.configured) {
+      gitOrThrow(root, ['config', '--local', HOOK_DECISION_KEY, 'declined']);
+      io.stdout.write(`git hook을 설정하지 않았어요. 다시 묻지 않아요. 나중에 설정하려면 ${HOOK_COMMAND}을 실행해요.\n`);
+    } else {
+      io.stdout.write('git hook 변경을 적용하지 않았어요.\n');
+    }
+    return 0;
+  }
+  const results = await applyGitHooks(root, plan);
+  printHookResults(io, results);
+  return results.some((result) => result.status === 'SKIP_MODIFIED') ? 2 : 0;
+}
+
+async function runHooks(root, options, io) {
+  const plan = await inspectGitHooks(root, await loadGitHooks());
+  if (!plan.available) {
+    io.stderr.write(`오류: ${plan.reason}\n`);
+    return 1;
+  }
+  io.stdout.write(`대상 프로젝트: ${root}\n`);
+  printHookPlan(io, plan);
+  const preserved = plan.conflicts.length > 0 || plan.items.some((item) => item.status === 'SKIP_MODIFIED');
+  if (options.dryRun) return preserved ? 2 : 0;
+  if (plan.conflicts.length > 0) {
+    io.stdout.write('충돌이 있어 git hook을 설정하지 않았어요.\n');
+    return 2;
+  }
+  if (!hookPlanIsActionable(plan)) {
+    io.stdout.write('적용할 변경이 없어요.\n');
+    return preserved ? 2 : 0;
+  }
+  if (!options.apply) {
+    if (!io.stdin.isTTY || !io.stdout.isTTY) {
+      io.stderr.write('비대화형 환경에서는 --apply를 지정해야 git hook을 설정할 수 있어요.\n');
+      return 1;
+    }
+    if (!(await askConfirmation(io, 'git hook 설정을 적용할까요? [y/N] ', 'hooks'))) {
+      io.stdout.write('적용을 취소했어요.\n');
+      return 0;
+    }
+  }
+  const results = await applyGitHooks(root, plan);
+  printHookResults(io, results);
+  return results.some((result) => result.status === 'SKIP_MODIFIED') ? 2 : 0;
+}
+
 function printPlan(io, root, entries, legacyIncludes) {
   io.stdout.write(`대상 프로젝트: ${root}\n`);
   if (legacyIncludes.size > 0) {
@@ -441,11 +759,11 @@ function printPlan(io, root, entries, legacyIncludes) {
   }
 }
 
-async function askConfirmation(io) {
-  if (io.confirm) return io.confirm();
+async function askConfirmation(io, question = '적용할까요? [y/N] ', kind = 'docs') {
+  if (io.confirm) return io.confirm(kind);
   const prompt = readline.createInterface({ input: io.stdin, output: io.stdout });
   try {
-    return /^y(es)?$/iu.test((await prompt.question('적용할까요? [y/N] ')).trim());
+    return /^y(es)?$/iu.test((await prompt.question(question)).trim());
   } finally {
     prompt.close();
   }
@@ -459,6 +777,7 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
       return 0;
     }
     const root = await resolveTarget(options.target);
+    if (options.command === 'hooks') return await runHooks(root, options, io);
     const projectName = markdownText(options.projectName || path.basename(root));
     const manifest = await loadManifest(root);
     const { entries, knownTargets, retiredEntries } = await loadEntries(projectName);
@@ -481,10 +800,14 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
       if (retiredEntry) plan.push(retiredEntry);
     }
     printPlan(io, root, plan, options.include);
-    if (options.dryRun) return 0;
+    if (options.dryRun) {
+      await offerGitHooks(root, options, io);
+      return 0;
+    }
     if (!plan.some((entry) => ACTIONABLE_STATUSES.has(entry.status))) {
       io.stdout.write('적용할 변경이 없어요.\n');
-      return plan.some((entry) => PRESERVED_STATUSES.has(entry.status)) ? 2 : 0;
+      const hookCode = await offerGitHooks(root, options, io);
+      return Math.max(plan.some((entry) => PRESERVED_STATUSES.has(entry.status)) ? 2 : 0, hookCode);
     }
     if (!options.apply) {
       if (!io.stdin.isTTY || !io.stdout.isTTY) {
@@ -527,7 +850,8 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const retired = results.filter((result) => result.status === 'RETIRED').length;
     const skipped = results.filter((result) => PRESERVED_STATUSES.has(result.status)).length;
     io.stdout.write(`생성 ${created}개, 갱신 ${updated}개, 삭제 ${deleted}개, 추적 ${tracked}개, 관리 종료 ${retired}개, 사용자 문서 보존 ${skipped}개예요.\n`);
-    return skipped ? 2 : 0;
+    const hookCode = await offerGitHooks(root, options, io);
+    return Math.max(skipped ? 2 : 0, hookCode);
   } catch (error) {
     io.stderr.write(`오류: ${error.message}\n`);
     return 1;

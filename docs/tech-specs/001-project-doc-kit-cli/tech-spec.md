@@ -4,7 +4,7 @@ title: "프로젝트 문서 키트 명령어"
 status: "초안"
 owner: ""
 reviewers: []
-last_updated: "2026-09-24"
+last_updated: "2026-09-29"
 related_issue: ""
 html: "./tech-spec.html"
 ---
@@ -18,6 +18,8 @@ UIKit 프로젝트에서 명령어 한 번으로 `AGENTS.md`, `CLAUDE.md`와 개
 명령어는 변경할 파일을 먼저 보여주고 확인받은 뒤 적용해요. 처음 실행하면 문서를 만들고, 같은 명령을 다시 실행하면 키트가 만든 문서 중 사용자가 수정하지 않은 파일만 최신화해요. 사용자가 수정했거나 관리 이력이 없는 기존 문서는 그대로 보존해요. `AGENTS.md`가 문서 진입점과 공통 작업 기준을 제공해요. `CLAUDE.md`는 `@AGENTS.md`로 같은 기준을 불러와서 중복 관리를 막아요. 상세 아키텍처 문서는 UIKit에 적용 가능한 설계 예시를 구체적으로 보여줘요. 현재 프로젝트를 분석한 결과라고 주장하지 않아요. Git 참조를 생략한 원격 실행을 임시 UIKit 프로젝트에서 검증했어요.
 
 Git 작업 흐름과 RxSwift 문서를 포함한 현재 문서 15개는 모두 기본 생성해요. 각 문서는 프로젝트가 해당 정책이나 라이브러리를 사용한다고 단정하지 않는 검토 초안이에요. 개발자는 실제 구현과 팀의 합의를 확인한 뒤 내용을 적용해요.
+
+문서와 별개로, push 직전에 Claude Code의 `code-review` 스킬을 돌리는 개인용 `pre-push` hook을 선택해서 설치할 수 있어요. git 저장소 루트에서 `init`을 터미널로 실행하면 문서 적용 뒤 한 번 묻고, `hooks ios-uikit` 명령으로 따로 설정할 수도 있어요. 생성된 `AGENTS.md`는 hook이 설정되지 않은 저장소에서 에이전트가 사용자에게 설정 여부를 묻고, 승낙하면 같은 명령을 실행하도록 안내해요.
 
 ## 배경
 
@@ -54,6 +56,8 @@ Git 작업 흐름과 RxSwift 문서를 포함한 현재 문서 15개는 모두 �
 - AI 작성 표기 문서는 커밋·PR의 AI 공동 작성자와 생성 문구 제외 원칙, Claude Code 설정 병합과 게시 전 확인 방법을 안내해야 해요. 설정 파일이나 Git 이력은 생성 명령이 변경하지 않아요.
 - 한국어 윤문 원칙은 문서 목적·정보 구성·문장 표현과 변경 규모별 PR 분량을 안내하고, 문서·PR 예시를 별도 Markdown 파일로 제공해야 해요. 가이드와 새 PR 설명은 `-다`체를 유지해요.
 - 이전 `--include gitflow`과 `--include rxswift` 명령은 기존 사용자 호환을 위해 허용하되 생성 결과를 바꾸지 않아야 해요.
+- push 전 코드 리뷰 hook은 사용자가 승낙한 경우에만 설치해야 해요. 승낙하면 `.githooks/pre-push`, `core.hooksPath`, `.gitignore`의 `.githooks/`를 한 번에 설정하고, 거절하면 기록해 `init`에서 다시 묻지 않아야 해요.
+- hook은 개인 설정이므로 커밋되는 `.project-docs/manifest.json`에 기록하지 않고, 수정하지 않은 hook만 최신 템플릿으로 갱신해야 해요.
 
 ## 목표가 아닌 것
 
@@ -63,7 +67,8 @@ Git 작업 흐름과 RxSwift 문서를 포함한 현재 문서 15개는 모두 �
 - 관리 이력이 없고 현재 템플릿과도 다른 기존 문서를 자동으로 키트 소유로 간주하지 않아요.
 - 사용자의 명시적 요청 없이 이슈나 `.github/PULL_REQUEST_TEMPLATE.md`를 만들지 않아요.
 - 전역 명령어 설치, npm 레지스트리 게시, 원격 사용자 템플릿 로딩은 포함하지 않아요.
-- 앱 소스, Xcode 프로젝트, CI 설정 또는 대상 프로젝트의 `package.json`을 생성·수정하지 않아요.
+- 앱 소스, Xcode 프로젝트, CI 설정 또는 대상 프로젝트의 `package.json`을 생성·수정하지 않아요. 예외로, 사용자가 git hook 설정을 승낙하면 `.gitignore`에 한 줄을 추가하고 로컬 git 설정(`core.hooksPath`와 `project-docs.*`)만 바꿔요.
+- 이미 다른 hook 경로(husky 등)를 쓰거나, `.githooks/`를 커밋해 뒀거나, `.git/hooks`에 사용 중인 hook(Git LFS 등)이 있는 저장소의 hook 설정을 바꾸지 않아요. 기존 hook과 연결(chaining)하는 기능은 이번 범위에 넣지 않아요.
 - `npx skills add`로 문서 키트를 스킬처럼 설치하지 않아요. 실행 경험만 비슷하게 제공해요.
 
 ## 계획
@@ -96,6 +101,8 @@ project-doc-kits/ios-uikit/
         ├── swiftstyle.md.tmpl
         ├── testing.md.tmpl
         └── gitflow.md.tmpl
+├── githooks/
+│   └── pre-push.tmpl
 └── retired/
     └── docs/
         └── Root.md.tmpl
@@ -139,6 +146,27 @@ CLI는 프로젝트 의존성을 분석해 문서 구성을 바꾸지 않아요.
 | `SKIP_UNTRACKED` | 관리 이력이 없고 현재 템플릿과 다른 기존 문서이므로 보존해요. |
 
 `CREATE`, `UPDATE`, `TRACK`, `DELETE`, `RETIRED`가 하나라도 있으면 적용 여부를 물어요. `DELETE`는 삭제 직전에 파일 종류와 내용 해시를 다시 확인하고 조건이 그대로일 때만 파일을 지워요. 관리 기록이 없는 파일은 `retired/` 템플릿과 정확히 같은 경우에만 삭제해요. `RETIRED`는 `.project-docs/manifest.json`의 관리 기록만 정리해요. 보존한 파일이 있으면 일부 적용을 전체 성공으로 오해하지 않도록 종료 코드 `2`를 반환해요. 별도 `update` 명령은 만들지 않아요.
+
+### 선택형 git hook 설정
+
+`kit.json`의 `gitHooks`는 hook 디렉터리(`.githooks`)와 설치할 hook 템플릿을 선언해요. hook 템플릿은 셸 스크립트라 자리 표시자를 치환하지 않고 그대로 복사해요.
+
+```bash
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit --dry-run
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit --apply
+```
+
+| 상황 | 동작 |
+| --- | --- |
+| `init`을 터미널에서 실행 | 문서 단계가 끝난 뒤 hook이 설정되지 않았고 거절 기록이 없으면 `push 전 Claude 코드 리뷰 git hook을 설정할까요? [y/N]`를 물어요. |
+| 승낙 | hook 파일(`0755`)과 `.gitignore`를 먼저 준비하고, 마지막에 `core.hooksPath`를 `.githooks`로 설정해요. |
+| 거절 | `git config project-docs.gitHooks declined`를 기록하고 이후 `init`에서는 안내 한 줄만 보여줘요. |
+| `init --apply` 또는 비대화형 실행 | hook을 바꾸지 않고 `hooks` 명령을 안내해요. |
+| `hooks` 명령 | 거절 기록과 관계없이 hook 단계만 실행하고, 적용하면 거절 기록을 지워요. |
+| git 저장소가 아니거나 하위 디렉터리 | `init`은 hook 단계를 조용히 건너뛰고, `hooks`는 오류로 끝나요. |
+
+hook 단계는 파일별 상태에 `SET`(`core.hooksPath` 설정)과 `ADD`(`.gitignore` 규칙 추가), `CONFLICT`를 더해요. hook 파일은 없으면 `CREATE`, 템플릿과 같으면 `UNCHANGED`예요. 다르면 로컬 git 설정 `project-docs.pre-push.hash`와 비교해 `UPDATE` 또는 `SKIP_MODIFIED`로 판단해요. `.gitignore`는 `git check-ignore --no-index`로 이미 무시되는지 확인하고, 아니면 기존 내용 뒤에 규칙을 추가해요. `core.hooksPath`가 다른 경로이거나 `.githooks/`에 추적 중인 파일이 있으면 `CONFLICT`로 표시하고 아무것도 바꾸지 않아요. `core.hooksPath`를 새로 설정해야 하는데 `.git/hooks`에 `.sample`이 아닌 hook이 있어도 `CONFLICT`예요. `core.hooksPath`를 바꾸면 Git LFS의 `pre-push` 같은 기존 hook이 소리 없이 꺼지기 때문이에요. `init`에서는 hook 단계의 결과가 문서의 종료 코드를 바꾸지 않아요. hook 경로 검사에서 오류가 나도 안내 한 줄만 보여주고, 거절 기록이 있으면 hook 경로를 검사하지 않아요. `hooks` 명령에서는 충돌이나 보존이 있으면 종료 코드 `2`를 반환해요.
 
 ### 프로젝트 적용 예시
 
@@ -301,3 +329,10 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
   - [x] 12-2. 기본 명령의 미리보기와 적용에서 문서 15개를 모두 처리해요.
   - [x] 12-3. 이전 `--include gitflow`과 `--include rxswift` 명령은 호환을 위해 허용하고 더 이상 필요하지 않다고 안내해요.
   - [x] 12-4. `AGENTS.md`, README, 패키징과 갱신 테스트를 필수 문서 구성에 맞춰요.
+- [x] 13. 선택형 push 전 코드 리뷰 git hook
+  - [x] 13-1. `kit.json`의 `gitHooks`와 `githooks/pre-push.tmpl`을 추가하고 패키지에 포함해요.
+  - [x] 13-2. `init`은 터미널에서 문서 단계 뒤 한 번 묻고, 거절은 로컬 git 설정에 기록해 다시 묻지 않아요.
+  - [x] 13-3. `hooks ios-uikit` 명령으로 hook 단계만 미리 보거나 적용해요.
+  - [x] 13-4. 수정하지 않은 hook만 갱신하고, 다른 `core.hooksPath`, 커밋된 `.githooks/`, `.git/hooks`의 사용 중인 hook이 있으면 바꾸지 않는 테스트가 통과해요.
+  - [x] 13-6. hook 검사 오류가 `init`의 문서 적용 결과와 종료 코드를 바꾸지 않는 테스트가 통과해요.
+  - [x] 13-5. `AGENTS.md`가 hook이 없는 저장소에서 사용자 승낙 뒤 설정하도록 안내하고, `gitflow.md`와 README에 동작을 적어요.
