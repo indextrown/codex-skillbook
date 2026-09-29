@@ -1022,7 +1022,7 @@ test('README remote examples use the repository package and explicit executable'
     .split('\n')
     .filter((line) => line.startsWith('npx ') && line.includes('--package=github:indextrown/codex-skillbook'));
 
-  assert.equal(remoteCommands.length, 5);
+  assert.equal(remoteCommands.length, 7);
   for (const command of remoteCommands) {
     assert.ok(command.startsWith(expectedPrefix), command);
   }

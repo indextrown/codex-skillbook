@@ -153,8 +153,18 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 병합 기준 원본을 보관하기 전에 적용한 프로젝트는 프로젝트의 git 기록에서 manifest 해시와 같은 과거 버전을 찾아 기준으로 써요. 기록에서도 찾지 못한 문서만 `SKIP_MODIFIED`로 보존해요. 팀원이 같은 기준으로 갱신할 수 있도록 `.project-docs/` 전체를 문서와 함께 커밋해 주세요.
 
 ```bash
-# 충돌이 난 문서에 충돌 표시를 넣어 직접 해결해요.
+# 1. 어떤 문서가 병합되거나 충돌하는지 먼저 확인해요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --dry-run
+
+# 2. 평소처럼 적용하면 MERGE 문서에 템플릿 변경이 반영돼요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit
+
+# 3. CONFLICT가 있으면 충돌 표시를 넣어 직접 해결해요.
 npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --write-conflicts
+
+# 4. 병합 결과를 확인하고 문서와 .project-docs/를 함께 커밋해요.
+git diff
+git add docs AGENTS.md CLAUDE.md .project-docs
 ```
 
 이미 `docs/` 폴더가 있어도 괜찮아요. 키트가 관리하는 경로만 확인하고 다른 문서는 건드리지 않아요. 관리 이력이 없는 기존 파일은 현재 템플릿과 완전히 같을 때만 추적을 시작하고, 내용이 다르면 그대로 보존해요.
