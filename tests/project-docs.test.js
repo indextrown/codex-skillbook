@@ -844,7 +844,7 @@ test('README remote examples use the repository package and explicit executable'
     .split('\n')
     .filter((line) => line.startsWith('npx ') && line.includes('--package=github:indextrown/codex-skillbook'));
 
-  assert.equal(remoteCommands.length, 7);
+  assert.equal(remoteCommands.length, 9);
   for (const command of remoteCommands) {
     assert.ok(command.startsWith(expectedPrefix), command);
   }
@@ -1281,7 +1281,7 @@ test('contribute without a path lists the edited documents it can send', async (
   const result = await invoke(['contribute', 'ios-uikit', '--target', root, '--project-name', 'MyUIKitApp']);
 
   assert.equal(result.code, 1);
-  assert.match(result.errors, /올릴 문서 경로를 지정해 주세요/u);
+  assert.match(result.errors, /올릴 문서 경로를 지정하거나 --all을 붙여 주세요/u);
   assert.match(result.errors, /^ {2}docs\/development\/testing\.md$/mu);
 });
 
@@ -1301,4 +1301,64 @@ test('contribute requires --apply outside a terminal and rejects unmanaged paths
   assert.match(unmanaged.errors, /문서 키트가 관리하는 문서가 아니에요/u);
   const traversal = await invoke(['contribute', 'ios-uikit', '../AGENTS.md', '--target', root]);
   assert.equal(traversal.code, 1);
+});
+
+const SWIFTSTYLE_TARGET = 'docs/development/swiftstyle.md';
+const SWIFTSTYLE_RULE = '- 모든 프로젝트에 적용할 새 규칙이에요.\n';
+
+function appendLocal(root, target, text) {
+  fs.appendFileSync(path.join(root, target), text);
+}
+
+test('contribute --all sends every edited document in one draft PR', async (t) => {
+  const remote = contributeRemote(t);
+  const root = await editedProject(t, (text) => text.replace(TEMPLATE_ROW, LOCAL_ROW));
+  appendLocal(root, SWIFTSTYLE_TARGET, SWIFTSTYLE_RULE);
+
+  const result = await invoke([
+    'contribute', 'ios-uikit', '--all', '--target', root, '--project-name', 'MyUIKitApp', '--apply',
+  ]);
+
+  assert.equal(result.code, 0, result.errors);
+  const [branch] = remote.branches();
+  assert.match(branch, /^docs\/contribute-docs-\d{14}$/u);
+  const changedFiles = execFileSync('git', ['-C', remote.bare, 'diff', '--name-only', 'main', branch], { encoding: 'utf8' });
+  assert.deepEqual(changedFiles.trim().split('\n').sort(), [
+    'project-doc-kits/ios-uikit/docs/development/swiftstyle.md.tmpl',
+    REMOTE_TESTING_TEMPLATE,
+  ]);
+  const ghArgs = fs.readFileSync(remote.ghLog, 'utf8').split('\n');
+  assert.ok(ghArgs.includes('[docs] testing.md, swiftstyle.md 템플릿을 개선한다'));
+});
+
+test('contribute --all skips a document whose remote template changed and sends the rest', async (t) => {
+  const remote = contributeRemote(t);
+  const root = await editedProject(t, (text) => text.replace(TEMPLATE_ROW, LOCAL_ROW));
+  appendLocal(root, SWIFTSTYLE_TARGET, SWIFTSTYLE_RULE);
+  fs.appendFileSync(path.join(remote.work, REMOTE_TESTING_TEMPLATE), '- 원격에서 추가한 확인 항목이에요.\n');
+  execFileSync('git', ['-C', remote.work, ...GIT_IDENTITY, 'commit', '-q', '-am', 'update']);
+  execFileSync('git', ['-C', remote.work, 'push', '-q', 'bare', 'main']);
+
+  const result = await invoke([
+    'contribute', 'ios-uikit', '--all', '--target', root, '--project-name', 'MyUIKitApp', '--dry-run',
+  ]);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /안내: 원격 템플릿이 마지막 적용 뒤 바뀌어서 자동으로 옮길 수 없어요: docs\/development\/testing\.md/u);
+  assert.match(result.output, /swiftstyle\.md\.tmpl/u);
+  assert.doesNotMatch(result.output, /diff --git a\/project-doc-kits\/ios-uikit\/docs\/development\/testing\.md\.tmpl/u);
+});
+
+test('contribute --all rejects explicit paths and reports when nothing was edited', async (t) => {
+  contributeRemote(t);
+  const root = project(t);
+  assert.equal((await invoke(['init', 'ios-uikit', '--target', root, '--apply'])).code, 0);
+
+  const mixed = await invoke(['contribute', 'ios-uikit', '--all', CONTRIBUTE_TARGET, '--target', root]);
+  assert.equal(mixed.code, 1);
+  assert.match(mixed.errors, /--all과 문서 경로는 함께 지정할 수 없어요/u);
+
+  const nothing = await invoke(['contribute', 'ios-uikit', '--all', '--target', root, '--dry-run']);
+  assert.equal(nothing.code, 0, nothing.errors);
+  assert.match(nothing.output, /올릴 변경이 없어요/u);
 });

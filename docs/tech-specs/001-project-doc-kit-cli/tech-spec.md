@@ -151,16 +151,16 @@ CLI는 프로젝트 의존성을 분석해 문서 구성을 바꾸지 않아요.
 
 ### 프로젝트 문서를 키트로 올리기
 
-`contribute ios-uikit <문서 경로>...`는 대상 프로젝트에서 고친 문서를 이 저장소의 템플릿 변경으로 만들어 PR을 올려요.
+`contribute ios-uikit <문서 경로>...` 또는 `contribute ios-uikit --all`은 대상 프로젝트에서 고친 문서를 이 저장소의 템플릿 변경으로 만들어 PR을 올려요.
 
 ```bash
 npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit docs/development/testing.md --dry-run
-npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit docs/development/testing.md
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit --all --dry-run
 ```
 
-1. 지정한 문서가 키트 관리 대상이고, manifest에 해시가 있으며, 그 해시와 내용이 다른지 확인해요. 경로를 지정하지 않으면 최신 템플릿을 바탕으로 수정한 문서 목록만 보여주고 종료 코드 `1`로 끝나요.
+1. 지정한 문서가 키트 관리 대상이고, manifest에 해시가 있으며, 그 해시와 내용이 다른지 확인해요. `--all`은 이 조건에 맞는 문서를 모두 모으고, 경로와 함께 쓸 수 없어요. 경로도 `--all`도 없으면 마지막 적용 뒤 수정한 문서 목록만 보여주고 종료 코드 `1`로 끝나요.
 2. `https://github.com/indextrown/codex-skillbook.git`의 `main`을 임시 폴더에 얕게 clone해요. npm 캐시의 키트가 아니라 방금 가져온 템플릿을 기준으로 삼아요.
-3. 원격 템플릿을 프로젝트 이름으로 렌더링한 해시가 manifest 해시와 다르면 거부해요. 로컬 문서에서 사용자 수정만 가를 기준이 없어서, 그대로 옮기면 그사이 들어온 원격 변경을 되돌리기 때문이에요. 이때는 해당 템플릿을 저장소에서 직접 수정하라고 안내해요.
+3. 원격 템플릿을 프로젝트 이름으로 렌더링한 해시가 manifest 해시와 다르면 거부해요. 로컬 문서에서 사용자 수정만 가를 기준이 없어서, 그대로 옮기면 그사이 들어온 원격 변경을 되돌리기 때문이에요. 이때는 해당 템플릿을 저장소에서 직접 수정하라고 안내해요. 경로를 지정한 실행은 오류로 멈추고, `--all`은 그 문서만 건너뛰고 나머지를 올려요.
 4. `git merge-file --theirs`로 템플릿 원문(현재), 렌더링한 템플릿(기준), 로컬 문서(상대)를 병합해요. 바뀌지 않은 줄은 원문을 그대로 쓰므로 `{{PROJECT_NAME}}`이 남아요. 로컬에서 고친 줄이 자리 표시자가 있는 줄과 겹치면 로컬 내용을 택해요. 결과를 다시 렌더링해 로컬 문서와 바이트 단위로 같은지 확인하고, 다르면 거부해요.
 5. 템플릿 diff와 프로젝트 이름(원문과 Markdown 이스케이프 형태)이 남은 줄을 보여줘요. `--dry-run`은 여기서 끝나요. 터미널에서는 공개 저장소에 push할지 묻고, 비대화형 환경에서는 `--apply`가 있어야 진행해요.
 6. `docs/contribute-<문서>-<UTC 시각>` 브랜치에 커밋해 push하고 `gh pr create --draft`로 PR을 만들어요. `gh`가 없으면 비교 주소를 안내해요. 대상 프로젝트의 파일은 바꾸지 않아요.
@@ -362,3 +362,4 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
   - [x] 14-2. 원격 템플릿이 마지막 적용 뒤 바뀌었으면 거부하고 템플릿을 직접 수정하도록 안내해요.
   - [x] 14-3. diff와 프로젝트 이름이 남은 줄을 보여준 뒤 확인을 받고, 브랜치 push와 draft PR 생성까지 진행해요.
   - [x] 14-4. push·PR, 미리보기, 프로젝트 이름 경고, 원격 변경 거부, 후보 목록, 비대화형 거부 테스트가 통과해요.
+  - [x] 14-5. `--all`로 수정한 문서를 모두 한 PR에 올리고, 원격 템플릿이 바뀐 문서만 건너뛰는 테스트가 통과해요.
