@@ -99,7 +99,8 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 ```text
 MyUIKitApp/
 ├── .project-docs/
-│   └── manifest.json                 ← 안전한 갱신에 쓰는 내용 해시
+│   ├── manifest.json                 ← 안전한 갱신에 쓰는 내용 해시
+│   └── base/                         ← 3-way 병합에 쓰는 마지막 적용 원본(*.base)
 ├── AGENTS.md                         ← 공통 AI 작업 지침
 ├── CLAUDE.md                         ← Claude Code용 `AGENTS.md` 연결
 └── docs/
@@ -145,7 +146,16 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 
 처음 사용한 `init ios-uikit` 명령을 다시 실행하면 최신 템플릿과 현재 문서를 비교해요. 별도 `update` 명령은 필요하지 않아요.
 
-`.project-docs/manifest.json`에는 마지막으로 적용한 문서의 내용 해시만 저장해요. 버전 번호는 없어요. 현재 파일의 해시가 마지막 적용 해시와 같을 때만 새 템플릿으로 갱신하므로, 사용자가 손댄 문서는 덮어쓰지 않아요. 팀원이 같은 기준으로 갱신할 수 있도록 이 파일도 문서와 함께 커밋해 주세요.
+`.project-docs/manifest.json`에는 마지막으로 적용한 문서의 내용 해시만 저장해요. 버전 번호는 없어요. 현재 파일의 해시가 마지막 적용 해시와 같으면 새 템플릿으로 바로 갱신해요.
+
+직접 수정한 문서도 최신 템플릿을 받을 수 있어요. `.project-docs/base/`에 마지막으로 적용한 템플릿 원본을 `*.base`로 보관해 두고, 재실행할 때 `git merge-file`로 3-way 병합해요. 로컬 수정과 템플릿 변경이 서로 다른 곳이면 둘 다 반영한 `MERGE`, 같은 곳을 다르게 고쳤으면 `CONFLICT`예요. 충돌한 문서는 기본적으로 건드리지 않아요. `--write-conflicts`를 붙여 다시 실행하면 충돌 표시(`<<<<<<< 현재 문서`)를 넣어 주므로, 직접 정리한 뒤 커밋해요. 병합하려면 `git`이 필요해요.
+
+병합 기준 원본을 보관하기 전에 적용한 프로젝트는 프로젝트의 git 기록에서 manifest 해시와 같은 과거 버전을 찾아 기준으로 써요. 기록에서도 찾지 못한 문서만 `SKIP_MODIFIED`로 보존해요. 팀원이 같은 기준으로 갱신할 수 있도록 `.project-docs/` 전체를 문서와 함께 커밋해 주세요.
+
+```bash
+# 충돌이 난 문서에 충돌 표시를 넣어 직접 해결해요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-uikit --write-conflicts
+```
 
 이미 `docs/` 폴더가 있어도 괜찮아요. 키트가 관리하는 경로만 확인하고 다른 문서는 건드리지 않아요. 관리 이력이 없는 기존 파일은 현재 템플릿과 완전히 같을 때만 추적을 시작하고, 내용이 다르면 그대로 보존해요.
 
@@ -155,15 +165,19 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 | --- | --- |
 | `CREATE` | 없는 문서를 새로 만들어요. |
 | `UPDATE` | 키트가 만들었고 사용자가 수정하지 않은 문서를 최신화해요. |
+| `MERGE` | 사용자가 수정한 문서에 템플릿 변경을 병합해요. |
+| `MODIFIED` | 사용자가 수정했고 템플릿은 바뀌지 않아서 그대로 둬요. |
 | `TRACK` | 현재 템플릿과 같은 기존 문서를 변경 없이 관리 대상으로 등록해요. |
 | `UNCHANGED` | 문서와 템플릿이 이미 같아요. |
 | `DELETE` | 키트에서 제외됐고 사용자가 수정하지 않은 기존 관리 문서를 삭제해요. |
 | `RETIRED` | 키트에서 제외된 문서가 이미 없어서 관리 기록만 제거해요. |
-| `SKIP_MODIFIED` | 키트 적용 후 사용자가 수정한 문서라서 보존해요. |
+| `CONFLICT` | 로컬 수정과 템플릿 변경이 같은 곳이라 병합하지 않고 보존해요. |
+| `BASE` | 이전 버전으로 적용한 프로젝트에 병합 기준 원본만 저장해요. |
+| `SKIP_MODIFIED` | 사용자가 수정했고 병합 기준 원본을 찾지 못해 보존해요. |
 | `SKIP_RETIRED_MODIFIED` | 키트에서 제외됐지만 사용자가 수정한 문서라서 보존해요. |
 | `SKIP_UNTRACKED` | 관리 이력이 없는 기존 문서라서 보존해요. |
 
-보존한 파일이 있으면 종료 코드 `2`를 반환해 자동화에서도 부분 적용을 구분할 수 있어요. 경로 순회, 심볼릭 링크, 파일·디렉터리 충돌은 적용 전에 거부해요.
+보존하거나 충돌한 파일이 있으면 종료 코드 `2`를 반환해 자동화에서도 부분 적용을 구분할 수 있어요. 경로 순회, 심볼릭 링크, 파일·디렉터리 충돌은 적용 전에 거부해요.
 
 ### push 전 코드 리뷰 git hook 설정하기
 
