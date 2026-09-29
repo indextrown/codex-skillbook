@@ -58,6 +58,7 @@ Git 작업 흐름과 RxSwift 문서를 포함한 현재 문서 15개는 모두 �
 - 이전 `--include gitflow`과 `--include rxswift` 명령은 기존 사용자 호환을 위해 허용하되 생성 결과를 바꾸지 않아야 해요.
 - push 전 코드 리뷰 hook은 사용자가 승낙한 경우에만 설치해야 해요. 승낙하면 `.githooks/pre-push`, `core.hooksPath`, `.gitignore`의 `.githooks/`를 한 번에 설정하고, 거절하면 기록해 `init`에서 다시 묻지 않아야 해요.
 - hook은 개인 설정이므로 커밋되는 `.project-docs/manifest.json`에 기록하지 않고, 수정하지 않은 hook만 최신 템플릿으로 갱신해야 해요.
+- 프로젝트에서 고친 문서는 `contribute ios-uikit`으로 이 저장소의 템플릿에 옮겨 draft PR로 올릴 수 있어야 해요. 수정하지 않은 줄의 자리 표시자는 보존하고, 공개 저장소에 올리기 전에 diff를 보여주고 확인받아야 해요.
 
 ## 목표가 아닌 것
 
@@ -70,6 +71,7 @@ Git 작업 흐름과 RxSwift 문서를 포함한 현재 문서 15개는 모두 �
 - 앱 소스, Xcode 프로젝트, CI 설정 또는 대상 프로젝트의 `package.json`을 생성·수정하지 않아요. 예외로, 사용자가 git hook 설정을 승낙하면 `.gitignore`에 한 줄을 추가하고 로컬 git 설정(`core.hooksPath`와 `project-docs.*`)만 바꿔요.
 - 이미 다른 hook 경로(husky 등)를 쓰거나, `.githooks/`를 커밋해 뒀거나, `.git/hooks`에 사용 중인 hook(Git LFS 등)이 있는 저장소의 hook 설정을 바꾸지 않아요. 기존 hook과 연결(chaining)하는 기능은 이번 범위에 넣지 않아요.
 - `npx skills add`로 문서 키트를 스킬처럼 설치하지 않아요. 실행 경험만 비슷하게 제공해요.
+- `contribute`는 프로젝트 전용 내용을 자동으로 걸러내지 않아요. 프로젝트 이름이 남은 줄만 경고하고, 공개해도 되는지는 사용자가 diff로 판단해요. 저장소 fork, 관리 이력이 없는 문서, 마지막 적용 뒤 원격 템플릿이 바뀐 문서의 기여는 이번 범위에 넣지 않아요.
 
 ## 계획
 
@@ -146,6 +148,24 @@ CLI는 프로젝트 의존성을 분석해 문서 구성을 바꾸지 않아요.
 | `SKIP_UNTRACKED` | 관리 이력이 없고 현재 템플릿과 다른 기존 문서이므로 보존해요. |
 
 `CREATE`, `UPDATE`, `TRACK`, `DELETE`, `RETIRED`가 하나라도 있으면 적용 여부를 물어요. `DELETE`는 삭제 직전에 파일 종류와 내용 해시를 다시 확인하고 조건이 그대로일 때만 파일을 지워요. 관리 기록이 없는 파일은 `retired/` 템플릿과 정확히 같은 경우에만 삭제해요. `RETIRED`는 `.project-docs/manifest.json`의 관리 기록만 정리해요. 보존한 파일이 있으면 일부 적용을 전체 성공으로 오해하지 않도록 종료 코드 `2`를 반환해요. 별도 `update` 명령은 만들지 않아요.
+
+### 프로젝트 문서를 키트로 올리기
+
+`contribute ios-uikit <문서 경로>...`는 대상 프로젝트에서 고친 문서를 이 저장소의 템플릿 변경으로 만들어 PR을 올려요.
+
+```bash
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit docs/development/testing.md --dry-run
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit docs/development/testing.md
+```
+
+1. 지정한 문서가 키트 관리 대상이고, manifest에 해시가 있으며, 그 해시와 내용이 다른지 확인해요. 경로를 지정하지 않으면 최신 템플릿을 바탕으로 수정한 문서 목록만 보여주고 종료 코드 `1`로 끝나요.
+2. `https://github.com/indextrown/codex-skillbook.git`의 `main`을 임시 폴더에 얕게 clone해요. npm 캐시의 키트가 아니라 방금 가져온 템플릿을 기준으로 삼아요.
+3. 원격 템플릿을 프로젝트 이름으로 렌더링한 해시가 manifest 해시와 다르면 거부해요. 로컬 문서에서 사용자 수정만 가를 기준이 없어서, 그대로 옮기면 그사이 들어온 원격 변경을 되돌리기 때문이에요. 이때는 해당 템플릿을 저장소에서 직접 수정하라고 안내해요.
+4. `git merge-file --theirs`로 템플릿 원문(현재), 렌더링한 템플릿(기준), 로컬 문서(상대)를 병합해요. 바뀌지 않은 줄은 원문을 그대로 쓰므로 `{{PROJECT_NAME}}`이 남아요. 로컬에서 고친 줄이 자리 표시자가 있는 줄과 겹치면 로컬 내용을 택해요. 결과를 다시 렌더링해 로컬 문서와 바이트 단위로 같은지 확인하고, 다르면 거부해요.
+5. 템플릿 diff와 프로젝트 이름(원문과 Markdown 이스케이프 형태)이 남은 줄을 보여줘요. `--dry-run`은 여기서 끝나요. 터미널에서는 공개 저장소에 push할지 묻고, 비대화형 환경에서는 `--apply`가 있어야 진행해요.
+6. `docs/contribute-<문서>-<UTC 시각>` 브랜치에 커밋해 push하고 `gh pr create --draft`로 PR을 만들어요. `gh`가 없으면 비교 주소를 안내해요. 대상 프로젝트의 파일은 바꾸지 않아요.
+
+PR이 merge되면 대상 프로젝트의 문서와 새 템플릿이 같아지므로, 다음 `init`에서 `TRACK`으로 관리 기록을 다시 맞춰요.
 
 ### 선택형 git hook 설정
 
@@ -262,6 +282,7 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
 - Swift 스타일 문서는 팀 정책을 확정하는 문서가 아니라 검토안이에요. 작성자 표기, 네이밍, `self`, 접근 제어와 MARK 간격은 실제 코드와 팀 합의를 확인한 뒤 적용해야 해요.
 - Git 흐름과 RxSwift 문서는 모두 생성하지만 대상 프로젝트의 확정 정책은 아니에요. 실제 Git 규칙과 라이브러리 사용 여부를 확인한 뒤 내용을 적용하고, Driver 미사용과 별도 확장도 확인된 규칙으로 단정하지 않아요.
 - PR 템플릿에 이슈 번호나 필수 체크 항목이 있어도 실행 권한을 뜻하지 않아요. 이슈와 PR 템플릿 파일은 사용자가 생성해 달라고 요청한 경우에만 만들어요.
+- `contribute`는 공개 저장소에 push해요. 프로젝트 이름 경고로 찾지 못하는 타깃 이름, 서버 주소, 사내 절차가 템플릿에 섞일 수 있으므로 확인 질문 전에 diff를 보여줘요.
 - 더 짧은 `npx @scope/project-docs` 명령이 필요해지면 npm 게시 권한과 패키지 이름을 별도로 결정해요. 현재 범위에는 포함하지 않아요.
 
 ## 진행 체크리스트
@@ -336,3 +357,8 @@ Git 참조를 생략한 원격 실행 흐름은 임시 폴더에서 검증했어
   - [x] 13-4. 수정하지 않은 hook만 갱신하고, 다른 `core.hooksPath`, 커밋된 `.githooks/`, `.git/hooks`의 사용 중인 hook이 있으면 바꾸지 않는 테스트가 통과해요.
   - [x] 13-6. hook 검사 오류가 `init`의 문서 적용 결과와 종료 코드를 바꾸지 않는 테스트가 통과해요.
   - [x] 13-5. `AGENTS.md`가 hook이 없는 저장소에서 사용자 승낙 뒤 설정하도록 안내하고, `gitflow.md`와 README에 동작을 적어요.
+- [x] 14. 프로젝트 문서를 키트 템플릿으로 기여
+  - [x] 14-1. `contribute ios-uikit <문서 경로>...`로 원격 `main`을 임시 clone해 로컬 수정분만 템플릿에 옮기고 자리 표시자를 보존해요.
+  - [x] 14-2. 원격 템플릿이 마지막 적용 뒤 바뀌었으면 거부하고 템플릿을 직접 수정하도록 안내해요.
+  - [x] 14-3. diff와 프로젝트 이름이 남은 줄을 보여준 뒤 확인을 받고, 브랜치 push와 draft PR 생성까지 진행해요.
+  - [x] 14-4. push·PR, 미리보기, 프로젝트 이름 경고, 원격 변경 거부, 후보 목록, 비대화형 거부 테스트가 통과해요.
