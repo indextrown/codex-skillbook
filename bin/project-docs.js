@@ -4,8 +4,9 @@
 
 const fs = require('node:fs/promises');
 const { constants } = require('node:fs');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
+const os = require('node:os');
 const path = require('node:path');
 const readline = require('node:readline/promises');
 
@@ -21,22 +22,30 @@ const HOOK_COMMAND = 'npx --yes --package=github:indextrown/codex-skillbook -- p
 const COMMAND_OPTIONS = {
   init: ['--target', '--project-name', '--include', '--dry-run', '--apply'],
   hooks: ['--target', '--dry-run', '--apply'],
+  contribute: ['--target', '--project-name', '--title', '--dry-run', '--apply'],
 };
+const CONTRIBUTE_REPOSITORY = 'indextrown/codex-skillbook';
+const CONTRIBUTE_BASE_BRANCH = 'main';
 
 const USAGE = `사용법:
   project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
                               [--dry-run | --apply]
   project-docs hooks ios-uikit [--target /absolute/path] [--dry-run | --apply]
+  project-docs contribute ios-uikit <문서 경로>... [--target /absolute/path]
+                              [--project-name 이름] [--title PR 제목] [--dry-run | --apply]
 
 명령:
   init   문서 키트를 적용해요. 터미널에서는 git hook 설정 여부도 한 번 물어요.
   hooks  push 전 Claude 코드 리뷰 git hook만 설정해요.
+  contribute
+         프로젝트에서 고친 문서를 키트 템플릿에 옮겨 이 저장소에 draft PR로 올려요.
 
 옵션:
   --target        대상 프로젝트의 절대 경로 (기본값: 현재 디렉터리)
   --project-name  문서에 표시할 프로젝트 이름 (기본값: 대상 폴더 이름)
   --dry-run       변경 예정 파일만 표시하고 쓰지 않음
   --apply         대화형 확인 없이 적용
+  --title         contribute가 만들 PR 제목
   --help          사용법 표시
 
 현재 키트의 문서는 모두 기본 생성해요.
@@ -48,14 +57,20 @@ function parseArguments(args) {
     return { help: true };
   }
   if (!Object.hasOwn(COMMAND_OPTIONS, args[0]) || args[1] !== KIT_NAME) {
-    throw new Error(`지원하는 명령은 "init ${KIT_NAME}"과 "hooks ${KIT_NAME}"뿐이에요.\n${USAGE}`);
+    throw new Error(`지원하는 명령은 "init ${KIT_NAME}", "hooks ${KIT_NAME}", "contribute ${KIT_NAME}"뿐이에요.\n${USAGE}`);
   }
 
-  const options = { command: args[0], dryRun: false, apply: false, include: new Set() };
+  const options = { command: args[0], dryRun: false, apply: false, include: new Set(), files: [] };
   const allowedFlags = COMMAND_OPTIONS[options.command];
   const seen = new Set();
   for (let index = 2; index < args.length; index += 1) {
     const flag = args[index];
+    if (options.command === 'contribute' && !flag.startsWith('-')) {
+      relativeSegments(flag, '올릴 문서');
+      if (options.files.includes(flag)) throw new Error(`올릴 문서를 중복 지정했어요: ${flag}`);
+      options.files.push(flag);
+      continue;
+    }
     if (!allowedFlags.includes(flag)) {
       throw new Error(`알 수 없는 옵션이에요: ${flag}`);
     }
@@ -74,6 +89,7 @@ function parseArguments(args) {
       }
       if (flag === '--target') options.target = value;
       if (flag === '--project-name') options.projectName = value;
+      if (flag === '--title') options.title = value;
       if (flag === '--include') {
         if (!SUPPORTED_INCLUDES.has(value)) {
           throw new Error(`지원하지 않는 --include 값이에요: ${value}`);
@@ -289,6 +305,25 @@ async function inspectEntry(root, entry, trackedHash) {
     existingHash,
     status,
   };
+}
+
+// git merge-file은 충돌 개수를 종료 코드로 돌려줘요. 음수(255 이상)는 실행 오류예요.
+async function mergeContents(current, base, latest, extraArgs) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'project-docs-merge-'));
+  try {
+    const files = { current, base, latest };
+    for (const [name, content] of Object.entries(files)) {
+      await fs.writeFile(path.join(directory, name), content, { mode: 0o600 });
+    }
+    const result = spawnSync('git', [
+      'merge-file', '-p', ...extraArgs,
+      path.join(directory, 'current'), path.join(directory, 'base'), path.join(directory, 'latest'),
+    ], { stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+    if (result.error || typeof result.status !== 'number' || result.status > 127) return null;
+    return { content: result.stdout, conflicts: result.status };
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 }
 
 async function inspectRetiredEntry(root, target, trackedHash, retiredTemplateHash) {
@@ -749,6 +784,240 @@ async function runHooks(root, options, io) {
   return results.some((result) => result.status === 'SKIP_MODIFIED') ? 2 : 0;
 }
 
+// 테스트는 로컬 저장소와 가짜 gh로 원격 작업을 대신해요.
+function contributeRepositoryUrl() {
+  return process.env.PROJECT_DOCS_REPOSITORY || `https://github.com/${CONTRIBUTE_REPOSITORY}.git`;
+}
+
+function runOrThrow(command, args, message, options = {}) {
+  const result = spawnSync(command, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options });
+  if (result.error || result.status !== 0) {
+    const detail = (result.stderr || result.error?.message || '').trim();
+    const error = new Error(`${message}${detail ? `\n${detail}` : ''}`);
+    error.missing = result.error?.code === 'ENOENT';
+    throw error;
+  }
+  return result.stdout.trim();
+}
+
+async function loadRemoteTemplates(checkout) {
+  const kitRoot = await fs.realpath(path.join(checkout, 'project-doc-kits', KIT_NAME));
+  const manifest = JSON.parse(await fs.readFile(path.join(kitRoot, 'kit.json'), 'utf8'));
+  if (manifest.name !== KIT_NAME || !Array.isArray(manifest.files)) {
+    throw new Error('원격 키트 설정을 읽을 수 없어요.');
+  }
+  const templates = new Map();
+  for (const item of manifest.files) {
+    relativeSegments(item.target, '원격 대상');
+    const templatePath = path.join(kitRoot, ...relativeSegments(item.template, '원격 템플릿'));
+    const stats = await lstatOrNull(templatePath);
+    if (!stats || stats.isSymbolicLink() || !stats.isFile() || !isWithin(kitRoot, await fs.realpath(templatePath))) {
+      throw new Error(`원격 템플릿을 읽을 수 없어요: ${item.template}`);
+    }
+    templates.set(item.target, { path: templatePath, repositoryPath: `project-doc-kits/${KIT_NAME}/${item.template}` });
+  }
+  return templates;
+}
+
+// 로컬 수정분만 원격 템플릿 원문에 옮겨요. 바뀌지 않은 줄은 원문을 그대로 써서 자리 표시자를 지켜요.
+// 로컬에서 고친 줄이 자리 표시자가 있는 줄과 겹치면 로컬 내용을 택하고, 남은 프로젝트 이름은 경고로 보여줘요.
+async function templateFromLocal(entry, remoteTemplate, projectName) {
+  const raw = await fs.readFile(remoteTemplate.path);
+  const rendered = renderTemplate(raw.toString('utf8'), projectName);
+  if (contentHash(rendered) !== entry.trackedHash) {
+    // 로컬 문서의 어느 부분이 사용자 수정인지 가를 기준이 없어서, 옮기면 원격 변경을 되돌릴 수 있어요.
+    throw new Error(`원격 템플릿이 마지막 적용 뒤 바뀌어서 자동으로 옮길 수 없어요: ${entry.target}\n저장소의 ${remoteTemplate.repositoryPath}를 직접 수정해 PR을 올려 주세요.`);
+  }
+  const merged = await mergeContents(raw, rendered, entry.local, ['--theirs']);
+  if (!merged) throw new Error('git merge-file을 실행하지 못했어요.');
+  let roundTrip;
+  try {
+    roundTrip = renderTemplate(merged.content.toString('utf8'), projectName);
+  } catch {
+    roundTrip = null;
+  }
+  if (!roundTrip || !roundTrip.equals(entry.local)) {
+    throw new Error(`문서를 템플릿으로 되돌리지 못했어요. {{...}} 형식의 문자열이 있는지 확인해 주세요: ${entry.target}`);
+  }
+  return merged.content;
+}
+
+function linesContaining(content, names) {
+  return content.toString('utf8').split('\n')
+    .map((line, index) => ({ line, number: index + 1 }))
+    .filter(({ line }) => names.some((name) => line.includes(name)));
+}
+
+function contributeTexts(targets, repositoryPaths, title) {
+  const names = targets.map((target) => path.posix.basename(target)).join(', ');
+  const body = [
+    '## 변경 내용',
+    '',
+    '프로젝트 문서에서 개선한 내용을 문서 키트 템플릿에 옮긴다. 수정하지 않은 줄은 템플릿 원문을 유지해 `{{PROJECT_NAME}}` 자리 표시자를 보존했다.',
+    '',
+    ...repositoryPaths.map((repositoryPath) => `- \`${repositoryPath}\``),
+    '',
+    '## 확인할 내용',
+    '',
+    '- [ ] 변경 이유와 배경을 이 본문에 적는다.',
+    '- [ ] 특정 프로젝트에만 해당하는 내용이 섞이지 않았는지 확인한다.',
+    '- [ ] 필요하면 README, 테스트와 테크 스펙을 함께 갱신한다.',
+    '',
+    '`project-docs contribute`로 만든 draft PR이다.',
+    '',
+  ].join('\n');
+  return {
+    commit: `[docs] ${names} 템플릿 개선 반영`,
+    title: title || `[docs] ${names} 템플릿을 개선한다`,
+    body,
+  };
+}
+
+function contributeBranch(targets) {
+  const slug = path.posix.basename(targets[0]).replace(/\.md$/u, '').toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'docs';
+  const stamp = new Date().toISOString().replace(/[-:T]/gu, '').slice(0, 14);
+  return `docs/contribute-${slug}-${stamp}`;
+}
+
+async function listContributable(root, manifest, entries) {
+  const candidates = [];
+  for (const entry of entries) {
+    const trackedHash = manifest.files.get(entry.target);
+    if (!trackedHash || trackedHash !== entry.templateHash) continue;
+    const stats = await lstatOrNull(path.join(root, ...entry.segments));
+    if (!stats || stats.isSymbolicLink() || !stats.isFile()) continue;
+    if (contentHash(await fs.readFile(path.join(root, ...entry.segments))) !== trackedHash) {
+      candidates.push(entry.target);
+    }
+  }
+  return candidates;
+}
+
+async function runContribute(root, options, io) {
+  const rawName = (options.projectName || path.basename(root)).trim();
+  const projectName = markdownText(rawName);
+  const manifest = await loadManifest(root);
+  const { entries } = await loadEntries(projectName);
+  const byTarget = new Map(entries.map((entry) => [entry.target, entry]));
+
+  if (options.files.length === 0) {
+    const candidates = await listContributable(root, manifest, entries);
+    io.stderr.write('오류: 이 저장소에 올릴 문서 경로를 지정해 주세요.\n');
+    if (candidates.length > 0) {
+      io.stderr.write('최신 템플릿을 바탕으로 수정한 문서예요:\n');
+      for (const candidate of candidates) io.stderr.write(`  ${candidate}\n`);
+    }
+    return 1;
+  }
+
+  const selected = [];
+  for (const target of options.files) {
+    const entry = byTarget.get(target);
+    if (!entry) throw new Error(`문서 키트가 관리하는 문서가 아니에요: ${target}`);
+    await inspectParents(root, entry.segments);
+    const destination = path.join(root, ...entry.segments);
+    const stats = await lstatOrNull(destination);
+    if (!stats || stats.isSymbolicLink() || !stats.isFile()) {
+      throw new Error(`올릴 문서가 없거나 일반 파일이 아니에요: ${target}`);
+    }
+    const trackedHash = manifest.files.get(target);
+    if (!trackedHash) throw new Error(`관리 이력이 없어 어떤 템플릿을 고쳤는지 알 수 없어요: ${target}`);
+    const local = await fs.readFile(destination);
+    if (contentHash(local) === trackedHash) {
+      io.stdout.write(`안내: 마지막 적용 뒤 수정한 내용이 없어 제외했어요: ${target}\n`);
+      continue;
+    }
+    selected.push({ target, trackedHash, local });
+  }
+  if (selected.length === 0) {
+    io.stdout.write('올릴 변경이 없어요.\n');
+    return 0;
+  }
+
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'project-docs-contribute-'));
+  try {
+    const checkout = path.join(workspace, 'codex-skillbook');
+    io.stdout.write(`${CONTRIBUTE_REPOSITORY}의 ${CONTRIBUTE_BASE_BRANCH} 브랜치를 임시 폴더에 가져오는 중이에요.\n`);
+    runOrThrow('git', [
+      'clone', '--quiet', '--depth', '1', '--branch', CONTRIBUTE_BASE_BRANCH, contributeRepositoryUrl(), checkout,
+    ], '저장소를 가져오지 못했어요.');
+    const templates = await loadRemoteTemplates(checkout);
+    const changed = [];
+    for (const entry of selected) {
+      const remoteTemplate = templates.get(entry.target);
+      if (!remoteTemplate) throw new Error(`원격 키트에 없는 문서예요: ${entry.target}`);
+      const content = await templateFromLocal(entry, remoteTemplate, projectName);
+      if (content.equals(await fs.readFile(remoteTemplate.path))) continue;
+      await writeAtomically(remoteTemplate.path, content);
+      changed.push({ ...entry, content, repositoryPath: remoteTemplate.repositoryPath });
+    }
+    if (changed.length === 0) {
+      io.stdout.write('템플릿에 옮길 변경이 없어요.\n');
+      return 0;
+    }
+
+    io.stdout.write(`대상 프로젝트: ${root}\n`);
+    io.stdout.write(`${CONTRIBUTE_REPOSITORY}에 올릴 템플릿 변경:\n`);
+    io.stdout.write(`${runOrThrow('git', ['-C', checkout, 'diff', '--no-color'], '변경 내용을 비교하지 못했어요.')}\n`);
+    const names = [...new Set([rawName, projectName])];
+    for (const item of changed) {
+      const lines = linesContaining(item.content, names);
+      if (lines.length === 0) continue;
+      io.stdout.write(`주의: 프로젝트 이름이 남은 줄이 있어요. 공개 저장소에 올라가도 되는지 확인해 주세요: ${item.repositoryPath}\n`);
+      for (const { line, number } of lines) io.stdout.write(`  ${number}: ${line}\n`);
+    }
+    if (options.dryRun) {
+      io.stdout.write('--dry-run이라 브랜치를 push하지 않았어요.\n');
+      return 0;
+    }
+    if (!options.apply) {
+      if (!io.stdin.isTTY || !io.stdout.isTTY) {
+        io.stderr.write('비대화형 환경에서는 --apply를 지정해야 PR을 만들 수 있어요.\n');
+        return 1;
+      }
+      const question = `공개 저장소 ${CONTRIBUTE_REPOSITORY}에 브랜치를 push하고 draft PR을 만들까요? [y/N] `;
+      if (!(await askConfirmation(io, question, 'contribute'))) {
+        io.stdout.write('PR을 만들지 않았어요.\n');
+        return 0;
+      }
+    }
+
+    const branch = contributeBranch(changed.map((item) => item.target));
+    const texts = contributeTexts(
+      changed.map((item) => item.target),
+      changed.map((item) => item.repositoryPath),
+      options.title,
+    );
+    runOrThrow('git', ['-C', checkout, 'switch', '--quiet', '-c', branch], '브랜치를 만들지 못했어요.');
+    runOrThrow('git', ['-C', checkout, 'add', '--', ...changed.map((item) => item.repositoryPath)], '변경을 스테이징하지 못했어요.');
+    runOrThrow('git', ['-C', checkout, 'commit', '--quiet', '-m', texts.commit], '커밋하지 못했어요. git user.name과 user.email 설정을 확인해 주세요.');
+    runOrThrow('git', ['-C', checkout, 'push', '--quiet', '-u', 'origin', branch], '브랜치를 push하지 못했어요. 저장소 쓰기 권한을 확인해 주세요.');
+    io.stdout.write(`PUSH             ${branch}\n`);
+
+    const compareUrl = `https://github.com/${CONTRIBUTE_REPOSITORY}/compare/${CONTRIBUTE_BASE_BRANCH}...${branch}?expand=1`;
+    let url;
+    try {
+      url = runOrThrow(process.env.PROJECT_DOCS_GH || 'gh', [
+        'pr', 'create', '--draft', '--base', CONTRIBUTE_BASE_BRANCH, '--head', branch,
+        '--title', texts.title, '--body', texts.body,
+      ], 'PR을 만들지 못했어요.', { cwd: checkout });
+    } catch (error) {
+      io.stdout.write(error.missing
+        ? 'gh가 없어 PR은 만들지 않았어요. 다음 주소에서 PR을 만들어 주세요.\n'
+        : `${error.message}\n다음 주소에서 PR을 만들어 주세요.\n`);
+      io.stdout.write(`${compareUrl}\n`);
+      return error.missing ? 0 : 1;
+    }
+    io.stdout.write(`PR               ${url.split('\n').pop()}\n`);
+    io.stdout.write('안내: draft PR의 본문에 변경 이유를 채운 뒤 리뷰를 요청해 주세요.\n');
+    io.stdout.write(`안내: PR이 merge된 뒤 init ${KIT_NAME}을 실행하면 이 문서가 다시 키트 관리 대상(TRACK)이 돼요.\n`);
+    return 0;
+  } finally {
+    await fs.rm(workspace, { recursive: true, force: true });
+  }
+}
+
 function printPlan(io, root, entries, legacyIncludes) {
   io.stdout.write(`대상 프로젝트: ${root}\n`);
   if (legacyIncludes.size > 0) {
@@ -778,6 +1047,7 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     }
     const root = await resolveTarget(options.target);
     if (options.command === 'hooks') return await runHooks(root, options, io);
+    if (options.command === 'contribute') return await runContribute(root, options, io);
     const projectName = markdownText(options.projectName || path.basename(root));
     const manifest = await loadManifest(root);
     const { entries, knownTargets, retiredEntries } = await loadEntries(projectName);

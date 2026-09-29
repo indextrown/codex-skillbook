@@ -165,6 +165,29 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-u
 
 보존한 파일이 있으면 종료 코드 `2`를 반환해 자동화에서도 부분 적용을 구분할 수 있어요. 경로 순회, 심볼릭 링크, 파일·디렉터리 충돌은 적용 전에 거부해요.
 
+### 프로젝트에서 고친 문서를 키트에 올리기
+
+프로젝트에서 문서를 고치다가 모든 프로젝트에 필요한 개선이 생기면 `contribute`로 이 저장소에 PR을 올려요. 저장소를 직접 복제하거나 템플릿 경로를 찾지 않아도 돼요.
+
+```bash
+# 1. 인자 없이 실행하면 올릴 수 있는 수정 문서 목록을 보여줘요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit
+
+# 2. 템플릿에 들어갈 변경을 먼저 확인해요. push하지 않아요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit docs/development/testing.md --dry-run
+
+# 3. 확인을 받은 뒤 브랜치를 push하고 draft PR을 만들어요.
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs contribute ios-uikit docs/development/testing.md
+```
+
+명령은 이 저장소의 `main`을 임시 폴더에 가져와서 로컬 수정분만 `project-doc-kits/ios-uikit/*.tmpl`에 옮겨요. 수정하지 않은 줄은 템플릿 원문을 그대로 써서 `{{PROJECT_NAME}}` 자리 표시자를 지켜요. 그다음 템플릿 diff를 보여주고, 확인을 받으면 `docs/contribute-<문서>-<시각>` 브랜치를 push하고 `gh`로 draft PR을 만들어요. 임시 폴더는 끝나면 지워요. `gh`가 없으면 PR을 만들 수 있는 주소를 알려줘요. PR 제목은 `--title`로 바꿀 수 있어요.
+
+- 이 저장소는 공개 저장소예요. 프로젝트 이름이 남은 줄은 따로 경고하지만, 타깃 이름·서버 주소처럼 프로젝트 전용 내용은 찾아내지 못해요. push 전에 diff를 꼭 확인해 주세요.
+- 마지막 적용 뒤 원격 템플릿이 바뀐 문서는 옮기지 않아요. 어느 부분이 로컬 수정인지 가를 수 없어 원격 변경을 되돌릴 수 있기 때문이에요. 이때는 안내하는 템플릿 파일을 이 저장소에서 직접 수정해 PR을 올려요.
+- 저장소에 push할 권한과 `git`의 `user.name`·`user.email` 설정이 필요해요.
+- PR 본문에는 변경한 템플릿 목록과 확인 항목만 들어가요. 변경 이유를 채운 뒤 draft를 해제해 주세요.
+- PR이 merge된 뒤 프로젝트에서 `init ios-uikit`을 실행하면 로컬 문서와 템플릿이 같아져 `TRACK`으로 다시 관리돼요.
+
 ### push 전 코드 리뷰 git hook 설정하기
 
 git 저장소 루트에서 `init`을 터미널로 실행하면, 문서를 적용한 뒤 `push 전 Claude 코드 리뷰 git hook을 설정할까요? [y/N]`를 한 번 물어요. 승낙하면 브랜치를 push하기 직전에 Claude Code의 `code-review` 스킬이 변경을 리뷰하고, 막아야 할 문제가 있으면 push를 중단해요. hook만 따로 설정하거나 나중에 설정하려면 다음 명령을 실행해요.
