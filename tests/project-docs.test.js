@@ -844,7 +844,7 @@ test('README remote examples use the repository package and explicit executable'
     .split('\n')
     .filter((line) => line.startsWith('npx ') && line.includes('--package=github:indextrown/codex-skillbook'));
 
-  assert.equal(remoteCommands.length, 4);
+  assert.equal(remoteCommands.length, 7);
   for (const command of remoteCommands) {
     assert.ok(command.startsWith(expectedPrefix), command);
   }
@@ -1143,4 +1143,162 @@ test('the pre-push hook reviews unpushed commits when the default branch cannot 
   assert.equal(result.status, 1);
   assert.doesNotMatch(result.stderr, /공통 조상/u);
   assert.match(result.stderr, /claude 명령을 찾을 수 없어요/u);
+});
+
+// contribute는 임시 원격 저장소와 가짜 gh로 push·PR 생성을 검증해요.
+const CONTRIBUTE_TARGET = 'docs/development/testing.md';
+const TEMPLATE_ROW = '| 테스트 타깃 | 확인 필요 | 확인 필요 |';
+const LOCAL_ROW = '| 테스트 타깃 | MyAppTests | Xcode 스킴 |';
+const GIT_IDENTITY = ['-c', 'user.name=test', '-c', 'user.email=test@example.com'];
+
+function contributeRemote(t) {
+  const work = project(t);
+  fs.cpSync(path.resolve(__dirname, '..', 'project-doc-kits'), path.join(work, 'project-doc-kits'), { recursive: true });
+  execFileSync('git', ['-C', work, 'init', '-q', '-b', 'main']);
+  execFileSync('git', ['-C', work, 'add', '.']);
+  execFileSync('git', ['-C', work, ...GIT_IDENTITY, 'commit', '-q', '-m', 'kit']);
+  const bare = path.join(project(t), 'remote.git');
+  execFileSync('git', ['clone', '-q', '--bare', work, bare]);
+  execFileSync('git', ['-C', work, 'remote', 'add', 'bare', bare]);
+
+  const tools = project(t);
+  const ghLog = path.join(tools, 'gh.log');
+  const gh = path.join(tools, 'gh');
+  fs.writeFileSync(gh, `#!/bin/sh\nprintf '%s\\n' "$@" > '${ghLog}'\necho https://github.com/indextrown/codex-skillbook/pull/999\n`, { mode: 0o755 });
+
+  const saved = {};
+  const env = {
+    PROJECT_DOCS_REPOSITORY: `file://${bare}`,
+    PROJECT_DOCS_GH: gh,
+    GIT_AUTHOR_NAME: 'test',
+    GIT_AUTHOR_EMAIL: 'test@example.com',
+    GIT_COMMITTER_NAME: 'test',
+    GIT_COMMITTER_EMAIL: 'test@example.com',
+  };
+  for (const [key, value] of Object.entries(env)) {
+    saved[key] = process.env[key];
+    process.env[key] = value;
+  }
+  t.after(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const branches = () => execFileSync('git', ['-C', bare, 'branch', '--list', 'docs/contribute-*'], { encoding: 'utf8' })
+    .split('\n').map((line) => line.trim()).filter(Boolean);
+  return { work, bare, ghLog, branches };
+}
+
+const REMOTE_TESTING_TEMPLATE = 'project-doc-kits/ios-uikit/docs/development/testing.md.tmpl';
+
+async function editedProject(t, edit) {
+  const root = project(t);
+  assert.equal((await invoke(['init', 'ios-uikit', '--target', root, '--project-name', 'MyUIKitApp', '--apply'])).code, 0);
+  const documentPath = path.join(root, CONTRIBUTE_TARGET);
+  fs.writeFileSync(documentPath, edit(fs.readFileSync(documentPath, 'utf8')));
+  return root;
+}
+
+test('contribute --apply pushes the local edit as a template change and opens a draft PR', async (t) => {
+  const remote = contributeRemote(t);
+  const root = await editedProject(t, (text) => text.replace(TEMPLATE_ROW, LOCAL_ROW));
+
+  const result = await invoke([
+    'contribute', 'ios-uikit', CONTRIBUTE_TARGET, '--target', root, '--project-name', 'MyUIKitApp', '--apply',
+  ]);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /\+\| 테스트 타깃 \| MyAppTests \| Xcode 스킴 \|/u);
+  assert.match(result.output, /PR\s+https:\/\/github\.com\/indextrown\/codex-skillbook\/pull\/999/u);
+  const [branch] = remote.branches();
+  assert.match(branch, /^docs\/contribute-testing-\d{14}$/u);
+  const template = execFileSync('git', ['-C', remote.bare, 'show', `${branch}:${REMOTE_TESTING_TEMPLATE}`], { encoding: 'utf8' });
+  assert.ok(template.includes(LOCAL_ROW));
+  assert.match(template, /^# \{\{PROJECT_NAME\}\} 테스트 안내$/mu);
+  assert.doesNotMatch(template, /MyUIKitApp/u);
+  const changedFiles = execFileSync('git', ['-C', remote.bare, 'diff', '--name-only', 'main', branch], { encoding: 'utf8' });
+  assert.equal(changedFiles.trim(), REMOTE_TESTING_TEMPLATE);
+  const ghArgs = fs.readFileSync(remote.ghLog, 'utf8').split('\n');
+  assert.ok(ghArgs.includes('--draft'));
+  assert.ok(ghArgs.includes('[docs] testing.md 템플릿을 개선한다'));
+  assert.equal(ghArgs[ghArgs.indexOf('--head') + 1], branch);
+});
+
+test('contribute --dry-run shows the template diff without pushing', async (t) => {
+  const remote = contributeRemote(t);
+  const root = await editedProject(t, (text) => text.replace(TEMPLATE_ROW, LOCAL_ROW));
+
+  const result = await invoke([
+    'contribute', 'ios-uikit', CONTRIBUTE_TARGET, '--target', root, '--project-name', 'MyUIKitApp', '--dry-run',
+  ]);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /testing\.md\.tmpl/u);
+  assert.match(result.output, /--dry-run이라 브랜치를 push하지 않았어요/u);
+  assert.deepEqual(remote.branches(), []);
+  assert.equal(fs.existsSync(remote.ghLog), false);
+});
+
+test('contribute warns about lines that still contain the project name', async (t) => {
+  contributeRemote(t);
+  const root = await editedProject(t, (text) => text
+    .replace('# MyUIKitApp 테스트 안내', '# MyUIKitApp 테스트 가이드')
+    .replace(TEMPLATE_ROW, '| 테스트 타깃 | MyUIKitAppTests | 확인 필요 |'));
+
+  const result = await invoke([
+    'contribute', 'ios-uikit', CONTRIBUTE_TARGET, '--target', root, '--project-name', 'MyUIKitApp', '--dry-run',
+  ]);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /주의: 프로젝트 이름이 남은 줄이 있어요/u);
+  assert.match(result.output, /^ {2}1: # MyUIKitApp 테스트 가이드$/mu);
+  assert.match(result.output, /MyUIKitAppTests/u);
+});
+
+test('contribute refuses when the remote template changed after the last apply', async (t) => {
+  const remote = contributeRemote(t);
+  const root = await editedProject(t, (text) => text.replace(TEMPLATE_ROW, LOCAL_ROW));
+  const remoteTemplate = path.join(remote.work, REMOTE_TESTING_TEMPLATE);
+  fs.appendFileSync(remoteTemplate, '- 원격에서 추가한 확인 항목이에요.\n');
+  execFileSync('git', ['-C', remote.work, ...GIT_IDENTITY, 'commit', '-q', '-am', 'update']);
+  execFileSync('git', ['-C', remote.work, 'push', '-q', 'bare', 'main']);
+
+  const result = await invoke([
+    'contribute', 'ios-uikit', CONTRIBUTE_TARGET, '--target', root, '--project-name', 'MyUIKitApp', '--apply',
+  ]);
+
+  assert.equal(result.code, 1);
+  assert.match(result.errors, /원격 템플릿이 마지막 적용 뒤 바뀌어서 자동으로 옮길 수 없어요/u);
+  assert.match(result.errors, /testing\.md\.tmpl를 직접 수정해/u);
+  assert.deepEqual(remote.branches(), []);
+});
+
+test('contribute without a path lists the edited documents it can send', async (t) => {
+  contributeRemote(t);
+  const root = await editedProject(t, (text) => text.replace(TEMPLATE_ROW, LOCAL_ROW));
+
+  const result = await invoke(['contribute', 'ios-uikit', '--target', root, '--project-name', 'MyUIKitApp']);
+
+  assert.equal(result.code, 1);
+  assert.match(result.errors, /올릴 문서 경로를 지정해 주세요/u);
+  assert.match(result.errors, /^ {2}docs\/development\/testing\.md$/mu);
+});
+
+test('contribute requires --apply outside a terminal and rejects unmanaged paths', async (t) => {
+  const remote = contributeRemote(t);
+  const root = await editedProject(t, (text) => text.replace(TEMPLATE_ROW, LOCAL_ROW));
+
+  const noApply = await invoke([
+    'contribute', 'ios-uikit', CONTRIBUTE_TARGET, '--target', root, '--project-name', 'MyUIKitApp',
+  ]);
+  assert.equal(noApply.code, 1);
+  assert.match(noApply.errors, /--apply/u);
+  assert.deepEqual(remote.branches(), []);
+
+  const unmanaged = await invoke(['contribute', 'ios-uikit', 'README.md', '--target', root]);
+  assert.equal(unmanaged.code, 1);
+  assert.match(unmanaged.errors, /문서 키트가 관리하는 문서가 아니에요/u);
+  const traversal = await invoke(['contribute', 'ios-uikit', '../AGENTS.md', '--target', root]);
+  assert.equal(traversal.code, 1);
 });
