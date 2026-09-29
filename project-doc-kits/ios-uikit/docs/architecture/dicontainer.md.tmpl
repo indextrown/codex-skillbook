@@ -177,6 +177,18 @@ func makeSplashViewModel(
 }
 ```
 
+## 현재 프로젝트의 공유 범위: NMEA 수신기
+
+NMEA 수신기는 경로마다 생성 방식이 달라요.
+
+| 프로퍼티·메서드 | 생성 방식 | 이유 |
+| --- | --- | --- |
+| `udpNMEAReceiver` | `lazy var` 공유 | UDP 6000 포트는 한 번만 바인딩할 수 있어요. 새로 만들면 `Address already in use`가 발생해요. |
+| `makeBLENMEAReceiver(peripheralName:)` | `make...()` | 찾을 장비 이름이 연결할 때마다 달라질 수 있어요. 경로가 바뀌면 앞 객체의 구독이 풀려 연결이 닫혀요. |
+| `nmeaReceiver` | `lazy var` 공유 | `SwitchableNMEAReceiver`예요. 수신 UseCase와 로그 기록소가 같은 수신기를 봐요. |
+| `nmeaTransportStore` | `lazy var` 공유 | 사용자가 고른 경로를 한 번만 읽어 두고 나눠 줘요. |
+| `nmeaReceptionRouteStore` | `lazy var` 공유 | 지도 탭이 정하고 `SwitchableNMEAReceiver`가 따라가요. 두 쪽이 같은 인스턴스를 봐야 해요. |
+
 ## 관련 문서
 
 - [전체 아키텍처 개요](architecture.md)에서 계층과 의존성 방향을 확인해요.

@@ -146,6 +146,42 @@ RxSwift/RxCocoa, GRDB, SnapKit, Then은 **선택 가능한 구현 도구**예요
 
 후보 목록은 설치 권장안이나 현재 사용 기술 목록이 아니에요. 프로젝트에서 쓰지 않는 항목은 제거해요.
 
+## NMEA 수신 경로: 전략 패턴
+
+장비가 보내는 NMEA는 Wi-Fi UDP와 BLE Notify 중 하나로 받아요. 세그먼트 `Wi-Fi | BLE`는 장비 AP에 붙은 뒤 작아진 시트의 장비 카드 바로 위에만 보여요. 연결하기 전에는 보이지 않아요. 고른 값은 앱을 다시 켜도 남아 다음 연결도 그 경로로 시작해요. 붙은 채로 바꾸면 고른 경로의 장비 출력을 곧바로 다시 맞추고 수신기를 갈아 끼워요.
+
+어느 쪽을 골라도 장비 AP 연결, 설정 API, SSE, NTRIP 보정 중계는 Wi-Fi로 동작해요. 보정을 장비로 넘기는 길이 Wi-Fi TCP 2101뿐이라 BLE를 골라도 AP 연결은 끊지 않아요.
+
+```mermaid
+flowchart LR
+    ViewModel[RTKMapViewModel] -->|update| RouteStore[NMEAReceptionRouteStore]
+    RouteStore -->|route| Switchable[SwitchableNMEAReceiver]
+    Switchable -->|.udp| UDP[UDPNMEAReceiver]
+    Switchable -->|.ble name| BLE[BLENMEAReceiver]
+    Switchable --> Reception[DefaultNMEAReceptionUseCase]
+    Switchable --> Recorder[LogEventRecorder]
+```
+
+| 구성 요소 | 계층 | 맡는 일 |
+| --- | --- | --- |
+| `NMEATransport` | Domain Entity | 사용자가 고른 경로(`wifi`, `ble`)예요. `NMEATransportStore`가 `UserDefaults`에 보관해요. |
+| `NMEAReceptionRoute` | Domain Entity | 수신기가 지금 열 경로(`none`, `udp`, `ble(peripheralName:)`)예요. BLE는 장비 설정에서 광고 이름을 읽은 뒤에야 `ble`이 돼요. |
+| `NMEAReceiving` | Infrastructure 계약 | 수신기 상태와 문장을 `events` 스트림 하나로 내보내요. 구독하는 동안만 수신기를 열어요. |
+| `UDPNMEAReceiver` | Infrastructure | UDP 6000 포트를 열어요. 구독이 모두 끊기면 포트를 닫아요. |
+| `BLENMEAReceiver` | Infrastructure | 광고 이름으로 장비를 찾아 연결하고, Notify·Indicate 특성을 모두 구독해요. 서비스와 특성 UUID는 정해 두지 않아요. |
+| `SwitchableNMEAReceiver` | Infrastructure | 경로가 바뀌면 앞 수신기 구독을 풀고 새 수신기로 갈아 끼워요. 바꿀 때 `stopped`를 먼저 보내 앞 경로의 수신 단계를 비워요. |
+| `NMEALineAssembler` | Infrastructure | UDP 데이터그램은 한 번에 나누고, BLE 조각은 줄바꿈이 올 때까지 모아요. |
+| `DeviceBLEOutputUseCase` | Domain UseCase | `GET /api/v1/config`의 `output.serial`을 읽고, 꺼져 있으면 `POST /api/apply/bt`로 켠 다음 광고 이름을 돌려줘요. |
+
+`DefaultNMEAReceptionUseCase`와 `LogEventRecorder`는 `NMEAReceiving`만 보므로 경로가 바뀌어도 코드를 고치지 않아요. 연결 전 시트의 단계는 세 개이고, 두 번째 단계만 경로마다 달라요.
+
+| 경로 | 연결 전 단계 | 연결 뒤 장비 카드 |
+| --- | --- | --- |
+| Wi-Fi | Wi-Fi 연결 → 장비 설정 맞추기(UDP 출력을 이 아이폰으로) → 첫 문장 기다리기 | `NMEA 5 Hz 수신 중` |
+| BLE | Wi-Fi 연결 → 장비 설정 맞추기(BLE 출력 켜기, 광고 이름 읽기) → 첫 문장 기다리기 | `장비 BLE 출력을 켜는 중` → `BLE <이름> 찾는 중` → `연결하는 중` → `Notify 구독 중` → `BLE NMEA 1 Hz 수신 중` |
+
+BLE 장비를 찾아 붙는 과정은 장비 AP에 붙은 뒤의 일이라 단계 대신 장비 카드 설명 줄에 적어요. 기다리는 이유(블루투스 꺼짐, 연결 끊김)와 실패 원인도 그 줄에 그대로 나와요.
+
 ## 새 기능 개발 체크리스트
 
 프로필 새로고침과 같은 데이터 기반 기능이라면 아래 순서로 경계를 확인해요. 필요 없는 계층은 건너뛰어요.
