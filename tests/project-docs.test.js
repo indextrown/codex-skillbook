@@ -377,7 +377,7 @@ test('re-running without legacy --include flags keeps every document under manag
   assert.equal(Object.hasOwn(manifest.files, 'docs/architecture/rxswift-input-output.md'), true);
 });
 
-test('re-running preserves an edited required RxSwift guide', async (t) => {
+test('re-running keeps an edited required RxSwift guide when the template did not change', async (t) => {
   const root = project(t);
   const args = ['init', 'ios-uikit', '--target', root, '--apply'];
   assert.equal((await invoke(args)).code, 0);
@@ -386,9 +386,187 @@ test('re-running preserves an edited required RxSwift guide', async (t) => {
 
   const result = await invoke(args);
 
-  assert.equal(result.code, 2);
-  assert.match(result.output, /SKIP_MODIFIED\s+docs\/architecture\/rxswift\.md/u);
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /MODIFIED\s+docs\/architecture\/rxswift\.md/u);
+  assert.match(result.output, /적용할 변경이 없어요/u);
   assert.equal(fs.readFileSync(guidePath, 'utf8'), '# 팀이 수정한 RxSwift 가이드\n');
+});
+
+const MERGE_TARGET = 'docs/development/testing.md';
+const LATEST_NOTICE = '> 문서 키트가 만든 초안이에요. 실제 프로젝트에서 실행한 명령만 확정된 방법으로 적어요.';
+const OLDER_NOTICE = '> 이전 키트가 만든 초안이에요.';
+const TEMPLATE_ROW = '| 테스트 타깃 | 확인 필요 | 확인 필요 |';
+const LOCAL_ROW = '| 테스트 타깃 | MyAppTests | Xcode 스킴 |';
+
+function baseSnapshotPath(root, target) {
+  return path.join(root, '.project-docs', 'base', `${target}.base`);
+}
+
+// 이전 키트로 적용한 뒤 사용자가 문서를 고친 상태를 만들어요.
+function simulateEditedOlderKit(root, { localEdit, keepBase = true }) {
+  const documentPath = path.join(root, MERGE_TARGET);
+  const latest = fs.readFileSync(documentPath, 'utf8');
+  assert.ok(latest.includes(LATEST_NOTICE) && latest.includes(TEMPLATE_ROW));
+  const older = latest.replace(LATEST_NOTICE, OLDER_NOTICE);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  manifest.files[MERGE_TARGET] = sha256(older);
+  fs.writeFileSync(manifestPath(root), `${JSON.stringify(manifest, null, 2)}\n`);
+  if (keepBase) fs.writeFileSync(baseSnapshotPath(root, MERGE_TARGET), older);
+  else fs.rmSync(path.join(root, '.project-docs', 'base'), { recursive: true });
+  const local = localEdit(older);
+  fs.writeFileSync(documentPath, local);
+  return { documentPath, latest, older, local };
+}
+
+test('applying documents stores a merge base next to the manifest', async (t) => {
+  const root = project(t);
+  assert.equal((await invoke(['init', 'ios-uikit', '--target', root, '--apply'])).code, 0);
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  for (const [target, hash] of Object.entries(manifest.files)) {
+    assert.equal(sha256(fs.readFileSync(baseSnapshotPath(root, target))), hash, target);
+  }
+});
+
+test('re-running merges template changes into a locally edited document', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const { documentPath, latest } = simulateEditedOlderKit(root, {
+    localEdit: (older) => older.replace(TEMPLATE_ROW, LOCAL_ROW),
+  });
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /MERGE\s+docs\/development\/testing\.md/u);
+  assert.match(result.output, /병합 1개, 충돌 0개, 로컬 수정 유지 0개/u);
+  const merged = fs.readFileSync(documentPath, 'utf8');
+  assert.equal(merged, latest.replace(TEMPLATE_ROW, LOCAL_ROW));
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(manifest.files[MERGE_TARGET], sha256(latest));
+  assert.equal(fs.readFileSync(baseSnapshotPath(root, MERGE_TARGET), 'utf8'), latest);
+
+  const again = await invoke(args);
+  assert.equal(again.code, 0, again.errors);
+  assert.match(again.output, /MODIFIED\s+docs\/development\/testing\.md/u);
+  assert.equal(fs.readFileSync(documentPath, 'utf8'), merged);
+});
+
+test('--dry-run previews a merge without changing the document', async (t) => {
+  const root = project(t);
+  assert.equal((await invoke(['init', 'ios-uikit', '--target', root, '--apply'])).code, 0);
+  const { documentPath, local } = simulateEditedOlderKit(root, {
+    localEdit: (older) => older.replace(TEMPLATE_ROW, LOCAL_ROW),
+  });
+
+  const result = await invoke(['init', 'ios-uikit', '--target', root, '--dry-run']);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /MERGE\s+docs\/development\/testing\.md/u);
+  assert.equal(fs.readFileSync(documentPath, 'utf8'), local);
+});
+
+test('a merge conflict leaves the document untouched until --write-conflicts is used', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const { documentPath, latest, older, local } = simulateEditedOlderKit(root, {
+    localEdit: (text) => text.replace(OLDER_NOTICE, '> 팀이 고친 안내 문장이에요.'),
+  });
+
+  const preserved = await invoke(args);
+
+  assert.equal(preserved.code, 2);
+  assert.match(preserved.output, /CONFLICT\s+docs\/development\/testing\.md/u);
+  assert.match(preserved.output, /--write-conflicts/u);
+  assert.equal(fs.readFileSync(documentPath, 'utf8'), local);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(manifest.files[MERGE_TARGET], sha256(older));
+
+  const written = await invoke([...args, '--write-conflicts']);
+
+  assert.equal(written.code, 2);
+  assert.match(written.output, /병합 0개, 충돌 1개/u);
+  const conflicted = fs.readFileSync(documentPath, 'utf8');
+  assert.match(conflicted, /^<<<<<<< 현재 문서$/mu);
+  assert.match(conflicted, /^> 팀이 고친 안내 문장이에요\.$/mu);
+  assert.ok(conflicted.includes(LATEST_NOTICE));
+  assert.match(conflicted, /^>>>>>>> 최신 템플릿$/mu);
+  const updatedManifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(updatedManifest.files[MERGE_TARGET], sha256(latest));
+  assert.equal(fs.readFileSync(baseSnapshotPath(root, MERGE_TARGET), 'utf8'), latest);
+});
+
+test('a project applied before merge bases recovers the base from git history', async (t) => {
+  const root = gitRepository(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const { documentPath, latest, older } = simulateEditedOlderKit(root, {
+    keepBase: false,
+    localEdit: (text) => text,
+  });
+  execFileSync('git', ['-C', root, 'add', '.']);
+  execFileSync('git', ['-C', root, '-c', 'user.name=test', '-c', 'user.email=test@example.com',
+    'commit', '-q', '-m', 'docs']);
+  fs.writeFileSync(documentPath, older.replace(TEMPLATE_ROW, LOCAL_ROW));
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /MERGE\s+docs\/development\/testing\.md/u);
+  assert.match(result.output, /BASE\s+\.project-docs\/base\/ \(병합 기준 원본 14개\)/u);
+  assert.equal(fs.readFileSync(documentPath, 'utf8'), latest.replace(TEMPLATE_ROW, LOCAL_ROW));
+  assert.equal(fs.readFileSync(baseSnapshotPath(root, MERGE_TARGET), 'utf8'), latest);
+});
+
+test('an edited document without a merge base is preserved with a notice', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const { documentPath, local } = simulateEditedOlderKit(root, {
+    keepBase: false,
+    localEdit: (older) => older.replace(TEMPLATE_ROW, LOCAL_ROW),
+  });
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 2);
+  assert.match(result.output, /SKIP_MODIFIED\s+docs\/development\/testing\.md/u);
+  assert.match(result.output, /병합 기준 원본을 찾지 못해/u);
+  assert.equal(fs.readFileSync(documentPath, 'utf8'), local);
+});
+
+test('an unchanged project from an older CLI stores merge bases once', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  fs.rmSync(path.join(root, '.project-docs', 'base'), { recursive: true });
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 0, result.errors);
+  assert.match(result.output, /BASE\s+\.project-docs\/base\/ \(병합 기준 원본 15개\)/u);
+  assert.equal(fs.existsSync(baseSnapshotPath(root, 'AGENTS.md')), true);
+  const again = await invoke(args);
+  assert.match(again.output, /적용할 변경이 없어요/u);
+});
+
+test('a symlinked merge base rejects the plan before writing', async (t) => {
+  const root = project(t);
+  const args = ['init', 'ios-uikit', '--target', root, '--apply'];
+  assert.equal((await invoke(args)).code, 0);
+  const basePath = baseSnapshotPath(root, 'AGENTS.md');
+  const outside = path.join(project(t), 'outside.md');
+  fs.writeFileSync(outside, '# 외부 문서\n');
+  fs.rmSync(basePath);
+  fs.symlinkSync(outside, basePath);
+
+  const result = await invoke(args);
+
+  assert.equal(result.code, 1);
+  assert.match(result.errors, /병합 기준 파일이 일반 파일이 아니거나 심볼릭 링크/u);
+  assert.equal(fs.readFileSync(outside, 'utf8'), '# 외부 문서\n');
 });
 
 test('an existing rxswift.md is preserved while the two companion documents are added', async (t) => {
@@ -844,7 +1022,7 @@ test('README remote examples use the repository package and explicit executable'
     .split('\n')
     .filter((line) => line.startsWith('npx ') && line.includes('--package=github:indextrown/codex-skillbook'));
 
-  assert.equal(remoteCommands.length, 4);
+  assert.equal(remoteCommands.length, 5);
   for (const command of remoteCommands) {
     assert.ok(command.startsWith(expectedPrefix), command);
   }

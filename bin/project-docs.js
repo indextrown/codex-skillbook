@@ -4,28 +4,34 @@
 
 const fs = require('node:fs/promises');
 const { constants } = require('node:fs');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
+const os = require('node:os');
 const path = require('node:path');
 const readline = require('node:readline/promises');
 
 const KIT_NAME = 'ios-uikit';
 const KIT_DIRECTORY = path.resolve(__dirname, '..', 'project-doc-kits', KIT_NAME);
 const MANIFEST_SEGMENTS = ['.project-docs', 'manifest.json'];
+// 3-way 병합의 기준으로 쓰려고 마지막으로 적용한 템플릿 원본을 보관해요.
+// 문서 도구가 사본을 실제 문서로 읽지 않도록 .base 확장자를 붙여요.
+const BASE_DIRECTORY_SEGMENTS = ['.project-docs', 'base'];
+const BASE_SUFFIX = '.base';
+const HISTORY_SEARCH_LIMIT = 200;
 const SUPPORTED_INCLUDES = new Set(['gitflow', 'rxswift']);
-const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'DELETE', 'RETIRED']);
-const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED', 'SKIP_RETIRED_MODIFIED']);
+const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'MERGE', 'DELETE', 'RETIRED', 'BASE']);
+const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED', 'SKIP_RETIRED_MODIFIED', 'CONFLICT']);
 const HOOK_ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'SET', 'ADD']);
 const HOOK_DECISION_KEY = 'project-docs.gitHooks';
 const HOOK_COMMAND = 'npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit';
 const COMMAND_OPTIONS = {
-  init: ['--target', '--project-name', '--include', '--dry-run', '--apply'],
+  init: ['--target', '--project-name', '--include', '--dry-run', '--apply', '--write-conflicts'],
   hooks: ['--target', '--dry-run', '--apply'],
 };
 
 const USAGE = `사용법:
   project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
-                              [--dry-run | --apply]
+                              [--dry-run | --apply] [--write-conflicts]
   project-docs hooks ios-uikit [--target /absolute/path] [--dry-run | --apply]
 
 명령:
@@ -37,9 +43,12 @@ const USAGE = `사용법:
   --project-name  문서에 표시할 프로젝트 이름 (기본값: 대상 폴더 이름)
   --dry-run       변경 예정 파일만 표시하고 쓰지 않음
   --apply         대화형 확인 없이 적용
+  --write-conflicts
+                  병합 충돌이 난 문서에 충돌 표시를 넣어 직접 해결할 수 있게 함
   --help          사용법 표시
 
 현재 키트의 문서는 모두 기본 생성해요.
+직접 수정한 문서도 최신 템플릿과 3-way 병합해서 갱신해요.
 이전 명령의 --include gitflow과 --include rxswift도 호환을 위해 허용해요.
 `;
 
@@ -51,7 +60,9 @@ function parseArguments(args) {
     throw new Error(`지원하는 명령은 "init ${KIT_NAME}"과 "hooks ${KIT_NAME}"뿐이에요.\n${USAGE}`);
   }
 
-  const options = { command: args[0], dryRun: false, apply: false, include: new Set() };
+  const options = {
+    command: args[0], dryRun: false, apply: false, writeConflicts: false, include: new Set(),
+  };
   const allowedFlags = COMMAND_OPTIONS[options.command];
   const seen = new Set();
   for (let index = 2; index < args.length; index += 1) {
@@ -67,6 +78,8 @@ function parseArguments(args) {
       options.dryRun = true;
     } else if (flag === '--apply') {
       options.apply = true;
+    } else if (flag === '--write-conflicts') {
+      options.writeConflicts = true;
     } else {
       const value = args[++index];
       if (!value || value.startsWith('--')) {
@@ -221,7 +234,13 @@ async function loadEntries(projectName) {
       throw new Error(`키트 밖의 템플릿은 읽을 수 없어요: ${item.template}`);
     }
     const content = renderTemplate(await fs.readFile(templatePath, 'utf8'), projectName);
-    entries.push({ target: item.target, segments: targetSegments, content, templateHash: contentHash(content) });
+    entries.push({
+      target: item.target,
+      segments: targetSegments,
+      baseSegments: baseSegments(targetSegments),
+      content,
+      templateHash: contentHash(content),
+    });
   }
 
   const retiredEntries = [];
@@ -289,6 +308,118 @@ async function inspectEntry(root, entry, trackedHash) {
     existingHash,
     status,
   };
+}
+
+function baseSegments(targetSegments) {
+  const segments = [...BASE_DIRECTORY_SEGMENTS, ...targetSegments];
+  segments[segments.length - 1] += BASE_SUFFIX;
+  return segments;
+}
+
+// 보관한 원본은 manifest에 기록한 해시와 같을 때만 병합 기준으로 믿어요.
+async function readBaseSnapshot(root, segments, expectedHash) {
+  await inspectParents(root, segments);
+  const destination = path.join(root, ...segments);
+  const stats = await lstatOrNull(destination);
+  if (!stats) return null;
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(`병합 기준 파일이 일반 파일이 아니거나 심볼릭 링크예요: ${destination}`);
+  }
+  const content = await fs.readFile(destination);
+  return contentHash(content) === expectedHash ? content : null;
+}
+
+async function writeBaseSnapshot(root, segments, content) {
+  await ensureParents(root, segments);
+  const destination = path.join(root, ...segments);
+  const stats = await lstatOrNull(destination);
+  if (stats && (stats.isSymbolicLink() || !stats.isFile())) {
+    throw new Error(`병합 기준 파일이 일반 파일이 아니거나 심볼릭 링크예요: ${destination}`);
+  }
+  if (stats && (await fs.readFile(destination)).equals(content)) return;
+  await writeAtomically(destination, content);
+}
+
+async function removeBaseSnapshot(root, segments) {
+  await inspectParents(root, segments);
+  const destination = path.join(root, ...segments);
+  const stats = await lstatOrNull(destination);
+  if (stats && !stats.isSymbolicLink() && stats.isFile()) await fs.unlink(destination);
+}
+
+// 병합 기준을 보관하기 전에 적용한 문서는 프로젝트 git 기록에서 해시가 같은 과거 버전을 찾아요.
+function recoverBaseFromHistory(root, target, expectedHash) {
+  const commits = git(root, ['log', `-n${HISTORY_SEARCH_LIMIT}`, '--format=%H', '--', target]);
+  if (!commits) return null;
+  for (const commit of commits.split('\n')) {
+    const result = spawnSync('git', ['-C', root, 'show', `${commit}:./${target}`], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    if (result.status === 0 && contentHash(result.stdout) === expectedHash) return result.stdout;
+  }
+  return null;
+}
+
+// git merge-file은 충돌 개수를 종료 코드로 돌려줘요. 음수(255 이상)는 실행 오류예요.
+async function mergeContents(current, base, latest) {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'project-docs-merge-'));
+  try {
+    const files = { current, base, latest };
+    for (const [name, content] of Object.entries(files)) {
+      await fs.writeFile(path.join(directory, name), content, { mode: 0o600 });
+    }
+    const result = spawnSync('git', [
+      'merge-file', '-p', '-L', '현재 문서', '-L', '이전 템플릿', '-L', '최신 템플릿',
+      path.join(directory, 'current'), path.join(directory, 'base'), path.join(directory, 'latest'),
+    ], { stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024 });
+    if (result.error || typeof result.status !== 'number' || result.status > 127) return null;
+    return { content: result.stdout, conflicts: result.status };
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+}
+
+// 사용자가 수정한 문서를 최신 템플릿과 병합할 수 있는지 판단해요.
+async function planModifiedEntry(root, inspected, trackedHash) {
+  // 마지막 적용 뒤 템플릿이 바뀌지 않았다면 로컬 수정만 있어서 할 일이 없어요.
+  if (trackedHash === inspected.templateHash) return { ...inspected, status: 'MODIFIED' };
+  const base = await readBaseSnapshot(root, inspected.baseSegments, trackedHash)
+    || recoverBaseFromHistory(root, inspected.target, trackedHash);
+  if (!base) return { ...inspected, reason: 'NO_BASE' };
+  const current = await fs.readFile(inspected.destination);
+  const merged = await mergeContents(current, base, inspected.content);
+  if (!merged) return { ...inspected, reason: 'NO_GIT' };
+  return {
+    ...inspected,
+    existingHash: contentHash(current),
+    mergedContent: merged.content,
+    conflicts: merged.conflicts,
+    status: merged.conflicts === 0 ? 'MERGE' : 'CONFLICT',
+  };
+}
+
+async function applyMergedEntry(root, entry) {
+  await inspectParents(root, entry.segments);
+  let handle;
+  try {
+    handle = await fs.open(entry.destination, constants.O_RDONLY | (constants.O_NOFOLLOW || 0));
+    const currentStat = await handle.stat();
+    if (!currentStat.isFile()) {
+      throw new Error(`병합 대상이 일반 파일이 아니에요: ${entry.destination}`);
+    }
+    // 병합을 계산한 뒤 사용자가 문서를 다시 고쳤다면 덮어쓰지 않아요.
+    if (contentHash(await handle.readFile()) !== entry.existingHash) return 'SKIP_MODIFIED';
+    await handle.close();
+    handle = null;
+    await writeAtomically(entry.destination, entry.mergedContent, currentStat.mode & 0o777);
+    return entry.status;
+  } catch (error) {
+    if (error.code === 'ENOENT') return 'SKIP_MODIFIED';
+    throw error;
+  } finally {
+    if (handle) await handle.close();
+  }
 }
 
 async function inspectRetiredEntry(root, target, trackedHash, retiredTemplateHash) {
@@ -759,6 +890,23 @@ function printPlan(io, root, entries, legacyIncludes) {
   }
 }
 
+function printMergeNotes(io, entries, options) {
+  const targets = (predicate) => entries.filter(predicate).map((entry) => entry.target).join(', ');
+  const conflicted = targets((entry) => entry.status === 'CONFLICT');
+  if (conflicted && !options.writeConflicts) {
+    io.stdout.write(`안내: 병합 충돌이 난 문서는 바꾸지 않았어요: ${conflicted}\n`);
+    io.stdout.write('안내: --write-conflicts를 붙여 다시 실행하면 충돌 표시를 넣어 직접 해결할 수 있어요.\n');
+  }
+  const withoutBase = targets((entry) => entry.status === 'SKIP_MODIFIED' && entry.reason === 'NO_BASE');
+  if (withoutBase) {
+    io.stdout.write(`안내: 병합 기준 원본을 찾지 못해 수정한 문서를 보존했어요: ${withoutBase}\n`);
+  }
+  const withoutGit = targets((entry) => entry.status === 'SKIP_MODIFIED' && entry.reason === 'NO_GIT');
+  if (withoutGit) {
+    io.stdout.write(`안내: git merge-file을 실행하지 못해 수정한 문서를 보존했어요: ${withoutGit}\n`);
+  }
+}
+
 async function askConfirmation(io, question = '적용할까요? [y/N] ', kind = 'docs') {
   if (io.confirm) return io.confirm(kind);
   const prompt = readline.createInterface({ input: io.stdin, output: io.stdout });
@@ -782,8 +930,16 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const manifest = await loadManifest(root);
     const { entries, knownTargets, retiredEntries } = await loadEntries(projectName);
     const plan = [];
+    let staleBases = 0;
     for (const entry of entries) {
-      plan.push(await inspectEntry(root, entry, manifest.files.get(entry.target)));
+      const trackedHash = manifest.files.get(entry.target);
+      let inspected = await inspectEntry(root, entry, trackedHash);
+      if (inspected.status === 'SKIP_MODIFIED') inspected = await planModifiedEntry(root, inspected, trackedHash);
+      if (['UNCHANGED', 'MODIFIED'].includes(inspected.status)
+          && !(await readBaseSnapshot(root, entry.baseSegments, entry.templateHash))) {
+        staleBases += 1;
+      }
+      plan.push(inspected);
     }
     const retiredByTarget = new Map(retiredEntries.map((entry) => [entry.target, entry]));
     const retiredTargets = new Set([
@@ -799,12 +955,19 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
       );
       if (retiredEntry) plan.push(retiredEntry);
     }
+    // 이전 버전으로 적용한 프로젝트는 문서 변경이 없어도 병합 기준 원본을 한 번 보관해요.
+    if (staleBases > 0) {
+      plan.push({ target: `${BASE_DIRECTORY_SEGMENTS.join('/')}/ (병합 기준 원본 ${staleBases}개)`, status: 'BASE' });
+    }
+    const isActionable = (entry) => ACTIONABLE_STATUSES.has(entry.status)
+      || (entry.status === 'CONFLICT' && options.writeConflicts);
     printPlan(io, root, plan, options.include);
+    printMergeNotes(io, plan, options);
     if (options.dryRun) {
       await offerGitHooks(root, options, io);
       return 0;
     }
-    if (!plan.some((entry) => ACTIONABLE_STATUSES.has(entry.status))) {
+    if (!plan.some(isActionable)) {
       io.stdout.write('적용할 변경이 없어요.\n');
       const hookCode = await offerGitHooks(root, options, io);
       return Math.max(plan.some((entry) => PRESERVED_STATUSES.has(entry.status)) ? 2 : 0, hookCode);
@@ -823,35 +986,45 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     const results = [];
     for (const entry of plan) {
       let status = entry.status;
-      if (entry.status === 'DELETE') {
+      if (status === 'DELETE') {
         status = await deleteRetiredEntry(root, entry, manifest.files.get(entry.target));
-      } else if (entry.status !== 'RETIRED' && ACTIONABLE_STATUSES.has(entry.status)) {
+      } else if (status === 'MERGE' || (status === 'CONFLICT' && options.writeConflicts)) {
+        status = await applyMergedEntry(root, entry);
+      } else if (['CREATE', 'UPDATE', 'TRACK'].includes(status)) {
         status = await applyEntry(root, entry, manifest.files.get(entry.target));
       }
-      results.push({ target: entry.target, status, templateHash: entry.templateHash });
+      // 기록한 문서는 최신 템플릿을 기준으로 삼아요. 충돌 표시를 넣은 문서도 다음 병합은 최신 템플릿에서 시작해요.
+      const recorded = ['CREATE', 'UPDATE', 'TRACK', 'UNCHANGED', 'MERGE', 'MODIFIED'].includes(status)
+        || (status === 'CONFLICT' && options.writeConflicts);
+      results.push({ ...entry, status, recorded });
     }
 
     const nextHashes = new Map(manifest.files);
     for (const result of results) {
       if (['DELETE', 'RETIRED'].includes(result.status)) {
         nextHashes.delete(result.target);
-      } else if (['CREATE', 'UPDATE', 'TRACK', 'UNCHANGED'].includes(result.status)) {
+        await removeBaseSnapshot(root, baseSegments(result.segments));
+      } else if (result.recorded) {
         nextHashes.set(result.target, result.templateHash);
+        await writeBaseSnapshot(root, result.baseSegments, result.content);
       }
     }
     await writeManifest(root, manifest, nextHashes);
 
     io.stdout.write('적용 결과:\n');
     for (const result of results) io.stdout.write(`${result.status.padEnd(16)} ${result.target}\n`);
-    const created = results.filter((result) => result.status === 'CREATE').length;
-    const updated = results.filter((result) => result.status === 'UPDATE').length;
-    const deleted = results.filter((result) => result.status === 'DELETE').length;
-    const tracked = results.filter((result) => result.status === 'TRACK').length;
-    const retired = results.filter((result) => result.status === 'RETIRED').length;
-    const skipped = results.filter((result) => PRESERVED_STATUSES.has(result.status)).length;
-    io.stdout.write(`생성 ${created}개, 갱신 ${updated}개, 삭제 ${deleted}개, 추적 ${tracked}개, 관리 종료 ${retired}개, 사용자 문서 보존 ${skipped}개예요.\n`);
+    const count = (status) => results.filter((result) => result.status === status).length;
+    const conflicts = count('CONFLICT');
+    const skipped = results.filter((result) => PRESERVED_STATUSES.has(result.status)).length - conflicts;
+    io.stdout.write(`생성 ${count('CREATE')}개, 갱신 ${count('UPDATE')}개, 삭제 ${count('DELETE')}개, 추적 ${count('TRACK')}개, 관리 종료 ${count('RETIRED')}개, 사용자 문서 보존 ${skipped}개예요.\n`);
+    if (count('MERGE') + conflicts + count('MODIFIED') > 0) {
+      io.stdout.write(`병합 ${count('MERGE')}개, 충돌 ${conflicts}개, 로컬 수정 유지 ${count('MODIFIED')}개예요.\n`);
+    }
+    if (conflicts > 0 && options.writeConflicts) {
+      io.stdout.write('안내: 충돌 표시(<<<<<<< 현재 문서)를 정리한 뒤 문서와 .project-docs/를 함께 커밋해 주세요.\n');
+    }
     const hookCode = await offerGitHooks(root, options, io);
-    return Math.max(skipped ? 2 : 0, hookCode);
+    return Math.max(skipped + conflicts > 0 ? 2 : 0, hookCode);
   } catch (error) {
     io.stderr.write(`오류: ${error.message}\n`);
     return 1;
