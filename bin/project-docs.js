@@ -22,7 +22,7 @@ const HOOK_COMMAND = 'npx --yes --package=github:indextrown/codex-skillbook -- p
 const COMMAND_OPTIONS = {
   init: ['--target', '--project-name', '--include', '--dry-run', '--apply'],
   hooks: ['--target', '--dry-run', '--apply'],
-  contribute: ['--target', '--project-name', '--title', '--dry-run', '--apply'],
+  contribute: ['--target', '--project-name', '--title', '--all', '--dry-run', '--apply'],
 };
 const CONTRIBUTE_REPOSITORY = 'indextrown/codex-skillbook';
 const CONTRIBUTE_BASE_BRANCH = 'main';
@@ -31,7 +31,7 @@ const USAGE = `사용법:
   project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
                               [--dry-run | --apply]
   project-docs hooks ios-uikit [--target /absolute/path] [--dry-run | --apply]
-  project-docs contribute ios-uikit <문서 경로>... [--target /absolute/path]
+  project-docs contribute ios-uikit (<문서 경로>... | --all) [--target /absolute/path]
                               [--project-name 이름] [--title PR 제목] [--dry-run | --apply]
 
 명령:
@@ -46,6 +46,7 @@ const USAGE = `사용법:
   --dry-run       변경 예정 파일만 표시하고 쓰지 않음
   --apply         대화형 확인 없이 적용
   --title         contribute가 만들 PR 제목
+  --all           contribute에서 마지막 적용 뒤 수정한 문서를 모두 올림
   --help          사용법 표시
 
 현재 키트의 문서는 모두 기본 생성해요.
@@ -82,6 +83,8 @@ function parseArguments(args) {
       options.dryRun = true;
     } else if (flag === '--apply') {
       options.apply = true;
+    } else if (flag === '--all') {
+      options.all = true;
     } else {
       const value = args[++index];
       if (!value || value.startsWith('--')) {
@@ -103,6 +106,9 @@ function parseArguments(args) {
   }
   if (options.dryRun && options.apply) {
     throw new Error('--dry-run과 --apply는 함께 사용할 수 없어요.');
+  }
+  if (options.all && options.files.length > 0) {
+    throw new Error('--all과 문서 경로는 함께 지정할 수 없어요.');
   }
   if (options.target && !path.isAbsolute(options.target)) {
     throw new Error('--target에는 절대 경로를 지정해 주세요.');
@@ -824,10 +830,8 @@ async function loadRemoteTemplates(checkout) {
 async function templateFromLocal(entry, remoteTemplate, projectName) {
   const raw = await fs.readFile(remoteTemplate.path);
   const rendered = renderTemplate(raw.toString('utf8'), projectName);
-  if (contentHash(rendered) !== entry.trackedHash) {
-    // 로컬 문서의 어느 부분이 사용자 수정인지 가를 기준이 없어서, 옮기면 원격 변경을 되돌릴 수 있어요.
-    throw new Error(`원격 템플릿이 마지막 적용 뒤 바뀌어서 자동으로 옮길 수 없어요: ${entry.target}\n저장소의 ${remoteTemplate.repositoryPath}를 직접 수정해 PR을 올려 주세요.`);
-  }
+  // 로컬 문서의 어느 부분이 사용자 수정인지 가를 기준이 없어서, 옮기면 원격 변경을 되돌릴 수 있어요.
+  if (contentHash(rendered) !== entry.trackedHash) return null;
   const merged = await mergeContents(raw, rendered, entry.local, ['--theirs']);
   if (!merged) throw new Error('git merge-file을 실행하지 못했어요.');
   let roundTrip;
@@ -849,7 +853,9 @@ function linesContaining(content, names) {
 }
 
 function contributeTexts(targets, repositoryPaths, title) {
-  const names = targets.map((target) => path.posix.basename(target)).join(', ');
+  const names = targets.length > 3
+    ? `문서 키트 템플릿 ${targets.length}개`
+    : targets.map((target) => path.posix.basename(target)).join(', ');
   const body = [
     '## 변경 내용',
     '',
@@ -874,7 +880,7 @@ function contributeTexts(targets, repositoryPaths, title) {
 }
 
 function contributeBranch(targets) {
-  const slug = path.posix.basename(targets[0]).replace(/\.md$/u, '').toLowerCase()
+  const slug = targets.length > 1 ? 'docs' : path.posix.basename(targets[0]).replace(/\.md$/u, '').toLowerCase()
     .replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '') || 'docs';
   const stamp = new Date().toISOString().replace(/[-:T]/gu, '').slice(0, 14);
   return `docs/contribute-${slug}-${stamp}`;
@@ -884,7 +890,7 @@ async function listContributable(root, manifest, entries) {
   const candidates = [];
   for (const entry of entries) {
     const trackedHash = manifest.files.get(entry.target);
-    if (!trackedHash || trackedHash !== entry.templateHash) continue;
+    if (!trackedHash) continue;
     const stats = await lstatOrNull(path.join(root, ...entry.segments));
     if (!stats || stats.isSymbolicLink() || !stats.isFile()) continue;
     if (contentHash(await fs.readFile(path.join(root, ...entry.segments))) !== trackedHash) {
@@ -901,18 +907,20 @@ async function runContribute(root, options, io) {
   const { entries } = await loadEntries(projectName);
   const byTarget = new Map(entries.map((entry) => [entry.target, entry]));
 
-  if (options.files.length === 0) {
-    const candidates = await listContributable(root, manifest, entries);
-    io.stderr.write('오류: 이 저장소에 올릴 문서 경로를 지정해 주세요.\n');
+  const candidates = options.all || options.files.length === 0
+    ? await listContributable(root, manifest, entries)
+    : [];
+  if (!options.all && options.files.length === 0) {
+    io.stderr.write('오류: 이 저장소에 올릴 문서 경로를 지정하거나 --all을 붙여 주세요.\n');
     if (candidates.length > 0) {
-      io.stderr.write('최신 템플릿을 바탕으로 수정한 문서예요:\n');
+      io.stderr.write('마지막 적용 뒤 수정한 문서예요:\n');
       for (const candidate of candidates) io.stderr.write(`  ${candidate}\n`);
     }
     return 1;
   }
 
   const selected = [];
-  for (const target of options.files) {
+  for (const target of options.all ? candidates : options.files) {
     const entry = byTarget.get(target);
     if (!entry) throw new Error(`문서 키트가 관리하는 문서가 아니에요: ${target}`);
     await inspectParents(root, entry.segments);
@@ -948,6 +956,14 @@ async function runContribute(root, options, io) {
       const remoteTemplate = templates.get(entry.target);
       if (!remoteTemplate) throw new Error(`원격 키트에 없는 문서예요: ${entry.target}`);
       const content = await templateFromLocal(entry, remoteTemplate, projectName);
+      if (!content) {
+        const message = `원격 템플릿이 마지막 적용 뒤 바뀌어서 자동으로 옮길 수 없어요: ${entry.target}\n`
+          + `저장소의 ${remoteTemplate.repositoryPath}를 직접 수정해 PR을 올려 주세요.`;
+        // --all은 문서 하나 때문에 전체를 멈추지 않고 나머지를 올려요.
+        if (!options.all) throw new Error(message);
+        io.stdout.write(`안내: ${message}\n`);
+        continue;
+      }
       if (content.equals(await fs.readFile(remoteTemplate.path))) continue;
       await writeAtomically(remoteTemplate.path, content);
       changed.push({ ...entry, content, repositoryPath: remoteTemplate.repositoryPath });
