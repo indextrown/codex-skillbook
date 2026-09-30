@@ -1,0 +1,110 @@
+# iOS ViewModel Actions 패턴 (3.0)
+
+> [!abstract]
+> ViewModel에서 Coordinator로 네비게이션 및 화면 전환을 요청하는 Actions 클로저 패턴을 다룬다.
+
+---
+
+## ViewModel Actions 패턴
+
+Actions는 ViewModel에서 Coordinator로 네비게이션 및 화면 전환을 요청하는 클로저 모음입니다.
+
+### Actions 정의
+
+**구조**:
+- **위치**: ViewModel 파일 내부, ViewModel 클래스 외부에 정의
+- **네이밍**: `<ViewName>ViewModelActions` 또는 `<ViewName>ViewActions`
+
+```swift
+// SplashViewModel.swift
+struct SplashViewActions {
+    let showAppMessage: (AppMessage) -> Void
+    let presentLogin: () -> Void
+    let pushMain: () -> Void
+}
+
+// MainViewModel.swift
+struct MainViewModelActions {
+    let showAppMessage: (AppMessage) -> Void
+    let actionBottomView: (BottomViewAction) -> Void
+    let popNavigation: () -> Void
+    let pushSettingViewController: () -> Void
+}
+```
+
+### Actions 전달 흐름
+
+```
+AppFlowCoordinator.start() 또는 push<ViewName>ViewController()
+  → ViewModelActions 생성 (Coordinator의 메서드 참조)
+  → AppDIContainer.make<ViewName>ViewModel(actions) 호출
+  → ViewModel 생성자에 Actions 주입
+  → ViewModel에서 actions.pushMain() 호출
+  → AppFlowCoordinator의 pushMainViewController() 실행
+```
+
+### ViewModel에서 Actions 사용
+
+**핵심 포인트**:
+- Actions는 **첫 번째 프로퍼티**로 선언
+- Init 파라미터에서도 **actions가 첫 번째**
+
+```swift
+final class DefaultSplashViewModel: BaseViewModel, SplashViewModel {
+
+    // MARK: - Property
+
+    private let actions: SplashViewActions
+    private let startNetworkMonitoringUseCase: StartNetworkMonitoringUseCase
+    private let checkNetworkUseCase: CheckNetworkUseCase
+
+
+
+    // MARK: - Life Cycle
+
+    init(
+        actions: SplashViewActions,
+        startNetworkMonitoringUseCase: StartNetworkMonitoringUseCase,
+        checkNetworkUseCase: CheckNetworkUseCase
+    ) {
+        self.actions = actions
+        self.startNetworkMonitoringUseCase = startNetworkMonitoringUseCase
+        self.checkNetworkUseCase = checkNetworkUseCase
+    }
+
+
+
+    // MARK: - Transform
+
+    func transform(input: SplashViewModelInput, disposeBag: DisposeBag) -> SplashViewModelOutput {
+        // 로그인 화면으로 이동
+        self.actions.presentLogin()
+
+        // 메인 화면으로 이동
+        self.actions.pushMain()
+
+        // 메시지 표시
+        self.actions.showAppMessage(.toast("로딩 중..."))
+    }
+}
+```
+
+### Actions 네이밍 가이드
+
+| 접두사 | 용도 | 예시 |
+|--------|------|------|
+| `push<Screen>` | NavigationController push | `pushSettingViewController` |
+| `present<Screen>` | Modal present | `presentLogin` |
+| `pop` | NavigationController pop | `popNavigation` |
+| `dismiss` | Modal dismiss | `dismissViewController` |
+| `show<Action>` | 특정 동작 수행 | `showAppMessage`, `showWebPage` |
+| `action<Component>` | 컴포넌트 액션 | `actionBottomView` |
+
+---
+
+## 관련 문서
+
+- [[iOS_Coordinator_Flow_v3|Coordinator Flow 가이드 (3.0)]]
+- [[iOS_Coordinator_DI_v3|DI Container 패턴 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Template_Presentation_v3|Presentation 템플릿 (3.0)]]

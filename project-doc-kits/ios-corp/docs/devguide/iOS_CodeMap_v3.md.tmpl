@@ -1,0 +1,178 @@
+# iOS 코드 매핑 가이드 (3.0)
+
+> [!abstract]
+> `50_iOS/Navi3.0/02_Mapping/` 내 Code_Map 문서 작성 규칙. 1 `.swift` = 1 `.md` 매핑 원칙과 frontmatter, Spec 연결 방법을 정의한다.
+
+---
+
+## 개요
+
+Code_Map은 iOS 프로젝트의 `.swift` 파일과 `30_Shared/10_iOS3.0`, `30_Shared/11_Android3.0` Spec 문서를 연결하는 **양방향 추적 문서**다. 마스터 인덱스는 [[_Code_Index|Code-Spec 매핑 인덱스]]를 참조한다.
+
+### 핵심 원칙
+
+1. **매핑 문서이지 코드 복사가 아니다** — 심볼 요약, 책임, Spec 링크만 기록
+2. **`.swift`가 SSOT** — `.md`는 메타데이터·매핑 정보만 보유
+3. **자동화 전제** — 생성·동기화는 스크립트, 수동은 Spec 매핑과 책임 기술에 한정
+4. **점진적 매핑** — 고가치 파일(UseCase, ViewModel)부터 우선 매핑
+
+---
+
+## Frontmatter 필드
+
+### 필수 필드
+
+| 필드 | AUTO/MANUAL | 설명 | 예시 |
+|------|-------------|------|------|
+| `type` | AUTO | 항상 `code_map` | `code_map` |
+| `source_path` | AUTO | iOS 프로젝트 기준 상대 경로 | `app/Domain/UseCase/Main/MarkEditUseCase.swift` |
+| `source_module` | AUTO | 소스 모듈 | `app`, `appTests`, `appUITests` |
+| `layer` | AUTO | 아키텍처 계층 | `domain_usecase` |
+| `owner` | AUTO | 기본값 | `업쓰` |
+| `status` | AUTO | 문서 상태 | `active`, `deprecated` |
+| `updated` | AUTO | 마지막 동기화 일자 | `2026-03-29` |
+| `tags` | AUTO | 태그 배열 | `[code_map, domain_usecase, app]` |
+| `last_synced_commit` | AUTO | 커밋 해시 (7자리) | `e77bfce` |
+| `source_hash` | AUTO | SHA-256 해시 | — |
+
+### 수동 매핑 필드
+
+| 필드 | 설명 | 예시 |
+|------|------|------|
+| `mapping_status` | 매핑 완료 상태 | `mapped`, `partial`, `unmapped` |
+| `related_features` | 연결된 Feature 문서 | `[[Feature_MarkEdit_iOS]]` |
+| `related_scenes` | 연결된 Scene 문서 | `[[Scene_MarkEdit_iOS]]` |
+| `related_apis` | 연결된 API 문서 | `[[API_Mark_iOS]]` |
+| `related_tests` | 연결된 테스트 Code_Map | `[[MarkEditUseCaseTests]]` |
+
+---
+
+## Layer 값 정의
+
+| layer 값 | 대상 폴더 |
+|----------|----------|
+| `application` | `app/Application/` |
+| `domain_entity` | `app/Domain/Entity/` |
+| `domain_interface` | `app/Domain/Interface/` |
+| `domain_usecase` | `app/Domain/UseCase/` |
+| `data_repository` | `app/Data/Repository/` |
+| `data_dto` | `app/Data/DTO/` |
+| `data_model` | `app/Data/Model/` |
+| `infra_service` | `app/Infrastructure/Service/` |
+| `infra_manager` | `app/Infrastructure/Manager/` |
+| `infra_storage` | `app/Infrastructure/Storage/` |
+| `infra_parser` | `app/Infrastructure/Parser/` |
+| `infra_calculator` | `app/Infrastructure/Calculator/` |
+| `infra_builder` | `app/Infrastructure/Builder/` |
+| `infra_notifier` | `app/Infrastructure/Notifier/` |
+| `infra_utils` | `app/Infrastructure/Utils/` |
+| `infra_spatial` | `app/Infrastructure/SpatialIndex/` |
+| `pres_viewcontroller` | `app/Presentation/*/View/` (VC) |
+| `pres_viewmodel` | `app/Presentation/*/ViewModel/` |
+| `pres_view` | `app/Presentation/*/View/` (UIView) |
+| `pres_common` | `app/Presentation/Common/` |
+| `pres_utils` | `app/Presentation/Utils/` |
+| `extension` | `app/Extension/` |
+| `resource` | `app/Resource/` |
+
+---
+
+## Mapping Status
+
+| 값 | 설명 |
+|----|------|
+| `mapped` | Spec 문서와 완전히 연결됨 (related_features/scenes/apis 모두 기입) |
+| `partial` | 일부 Spec만 연결됨 |
+| `unmapped` | Spec 매핑 미완료 (자동 생성 직후 기본값) |
+
+---
+
+## 파일 네이밍
+
+Swift 파일명을 유지하고 확장자만 `.md`로 변경한다.
+
+| Swift 원본 | Code_Map 문서 |
+|-----------|--------------|
+| `SigninUseCase.swift` | `SigninUseCase.md` |
+| `DefaultSignRepository.swift` | `DefaultSignRepository.md` |
+| `Extension+String.swift` | `Extension+String.md` |
+
+---
+
+## 폴더 구조
+
+`50_iOS/Navi3.0/02_Mapping/` 하위는 iOS 프로젝트 폴더를 **1:1 미러링**한다.
+
+```
+50_iOS/Navi3.0/02_Mapping/
+├── _Code_Index.md            # 마스터 인덱스
+├── _Archive/                 # deprecated 매핑 문서 보관
+├── app/                      # 프로덕션 코드 매핑
+│   ├── Application/          # DI, Coordinator, AppDelegate (5)
+│   ├── Domain/               # 비즈니스 로직 계층 (149)
+│   ├── Data/                 # 데이터 계층 (46)
+│   ├── Infrastructure/       # 인프라 계층 (130)
+│   ├── Presentation/         # UI 계층 (251)
+│   └── Extension/            # Swift Extension (27)
+├── appTests/                 # 단위 테스트 매핑 (85)
+└── appUITests/               # UI 테스트 매핑 (2)
+```
+
+---
+
+## 본문 구조
+
+Code_Map 문서 본문은 **AUTO 영역**과 **MANUAL 영역**으로 분리한다.
+
+### AUTO 영역 (스크립트가 덮어씀)
+
+```markdown
+<!-- AUTO:START — sync 스크립트가 덮어씁니다. 수동 편집 금지. -->
+
+## 소스 정보
+(파일 경로, 모듈, 계층, 최종 동기화 정보)
+
+## 심볼 테이블
+(class/struct/enum/protocol 선언, 주요 프로퍼티, 메서드 시그니처)
+
+## 의존성
+(import, 주입받는 타입, 프로토콜 채택)
+
+<!-- AUTO:END -->
+```
+
+### MANUAL 영역 (수동 작성)
+
+```markdown
+## 책임 요약
+(이 파일이 하는 일을 1~3문장으로 기술)
+
+## Spec 매핑
+(연결된 Feature, Scene, API 문서 위키 링크)
+
+## 비즈니스 규칙
+(이 파일이 구현하는 핵심 비즈니스 규칙)
+```
+
+---
+
+## 매핑 우선순위
+
+| 우선순위 | 대상 | 이유 |
+|---------|------|------|
+| P0 | UseCase (70+) | Spec ↔ 비즈니스 로직의 핵심 연결점 |
+| P0 | ViewModel (26) | UI ↔ 비즈니스 로직 바인딩 지점 |
+| P1 | Repository (30+) | 데이터 흐름 추적 |
+| P2 | Builder (8) | Feature 빌더 ↔ Scene 연결 |
+| P3 | Entity (100+) | 모델 정의 참조 |
+| P4 | Extension, Utils | 공통 유틸리티 |
+
+---
+
+## 관련 문서
+
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[_Code_Index|Code-Spec 매핑 인덱스]]
+- [[iOS_FolderStructure_v3|iOS 폴더 구조 가이드 (3.0)]]
+- [[iOS_Architecture_v3|iOS 아키텍처 가이드 (3.0)]]
+- [[03_Metadata|메타데이터 표준]]

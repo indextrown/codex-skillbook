@@ -1,0 +1,112 @@
+# iOS UseCase 템플릿 (3.0)
+
+> [!abstract]
+> UseCase 레이어의 코드 템플릿. 기본 Class/Struct MARK 구조와 UseCase protocol/구현체 템플릿을 제공한다.
+
+---
+
+## 기본 Class/Struct 구조
+
+모든 Class, Struct는 다음 섹션으로 구성됩니다:
+
+| 섹션 | 용도 |
+|------|------|
+| **Property** | 변수 정의 |
+| **Life Cycle** | 초기화 및 기본 함수 override |
+| **Interface** | 외부와의 소통을 위한 public 함수 |
+| **Private** | 비공개 함수 |
+
+```swift
+import Foundation
+
+final class <#ClassName#> {
+
+    // MARK: - Property
+
+    private var delay: TimeInterval
+
+
+
+    // MARK: - Life Cycle
+
+    init(delay: TimeInterval) {
+        self.delay = delay
+    }
+
+
+
+    // MARK: - Interface
+
+    func update(_ delay: TimeInterval) {
+        self.delay = delay
+    }
+
+
+
+    // MARK: - Private
+
+    private func start() {
+
+    }
+}
+```
+
+---
+
+## UseCase 템플릿
+
+**파일 위치**: `Domain/UseCase/[Feature]/`
+**파일명**: `<#name#>UseCase.swift`
+
+```swift
+import Foundation
+
+protocol <#name#>UseCase {
+    // protocol 정의
+}
+
+
+
+// MARK: - Default<#name#>UseCase
+
+final class Default<#name#>UseCase {
+
+    // MARK: - Property
+
+
+
+    // MARK: - Life Cycle
+
+    init(
+
+    ) {
+
+    }
+
+
+
+    // MARK: - Private
+
+    private func <#function#>() {
+
+    }
+}
+
+
+
+// MARK: - <#name#>UseCase
+
+extension Default<#name#>UseCase: <#name#>UseCase {
+    // protocol 구현체
+}
+```
+
+---
+
+## 관련 문서
+
+- [[iOS_Template_Repository_v3|Repository 템플릿 (3.0)]]
+- [[iOS_Template_Presentation_v3|Presentation 템플릿 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|레이어별 구조 및 위치 규칙]]
+- [[iOS_SwiftStyle_v3|코드 스타일 및 MARK 규칙]]

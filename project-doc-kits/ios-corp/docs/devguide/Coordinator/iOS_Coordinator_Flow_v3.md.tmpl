@@ -1,0 +1,211 @@
+# iOS Coordinator Flow 가이드 (3.0)
+
+> [!abstract]
+> AppFlowCoordinator의 네비게이션 관리, 화면 전환, 생명주기 및 베스트 프랙티스를 다룬다.
+
+---
+
+## Coordinator 패턴 개요
+
+Coordinator 패턴은 화면 전환 로직을 ViewController에서 분리하여 네비게이션 플로우를 관리하는 디자인 패턴입니다.
+
+**장점**:
+- ViewController의 책임 분리 (화면 전환 로직 제거)
+- 네비게이션 플로우의 중앙 집중식 관리
+- 재사용 가능한 ViewController
+- 테스트 용이성 향상
+
+**구성 요소**:
+- **AppFlowCoordinator**: 전체 앱의 화면 전환과 네비게이션 관리
+- **AppDIContainer**: 의존성 생성 및 주입
+- **ViewModel Actions**: ViewModel에서 Coordinator로의 네비게이션 요청
+
+---
+
+## AppFlowCoordinator 구현
+
+AppFlowCoordinator는 전체 앱의 네비게이션을 관리하는 단일 Coordinator입니다.
+
+### Coordinator Protocol
+
+```swift
+// Presentation/Utils/Coordinator.swift
+protocol Coordinator {
+    func start()
+}
+```
+
+### AppFlowCoordinator 구조
+
+```swift
+final class AppFlowCoordinator {
+
+    // MARK: - Property
+
+    private let navigationController: UINavigationController
+    private let appDIContainer: AppDIContainer
+    private var bottomView: BottomView?
+
+
+
+    // MARK: - Life Cycle
+
+    init(navigationController: UINavigationController, appDIContainer: AppDIContainer) {
+        self.navigationController = navigationController
+        self.appDIContainer = appDIContainer
+    }
+}
+```
+
+### Coordinator 구현
+
+```swift
+extension AppFlowCoordinator: Coordinator {
+
+    func start() {
+        let actions = SplashViewActions(
+            showAppMessage: self.showAppMessage,
+            presentLogin: self.presentSigninViewController,
+            pushMain: self.pushMainViewController
+        )
+        let viewModel = self.appDIContainer.makeSplashViewModel(actions)
+        let viewController = SplashViewController(viewModel)
+        self.navigationController.setViewControllers([viewController], animated: false)
+    }
+}
+```
+
+### 화면 전환 메서드 패턴
+
+```swift
+private func push<ViewName>ViewController() {
+    // 1. ViewModelActions 생성
+    let actions = <ViewName>ViewModelActions(
+        showAppMessage: self.showAppMessage,
+        actionBottomView: self.actionBottomView,
+        // 다음 화면 전환 메서드들...
+    )
+
+    // 2. AppDIContainer에서 ViewModel 생성
+    let viewModel = self.appDIContainer.make<ViewName>ViewModel(actions)
+
+    // 3. ViewController 생성 및 화면 전환
+    let viewController = <ViewName>ViewController(viewModel)
+    self.bottomView?.push(viewController)  // 또는 navigationController.push
+}
+```
+
+### SceneDelegate 연결
+
+```swift
+// SceneDelegate.swift
+func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options: UIScene.ConnectionOptions) {
+    guard let windowScene = (scene as? UIWindowScene) else { return }
+
+    let window = UIWindow(windowScene: windowScene)
+    self.window = window
+
+    let navigationController = UINavigationController()
+    let appDIContainer = AppDIContainer()
+    let appFlowCoordinator = AppFlowCoordinator(
+        navigationController: navigationController,
+        appDIContainer: appDIContainer
+    )
+
+    window.rootViewController = navigationController
+    window.makeKeyAndVisible()
+
+    appFlowCoordinator.start()
+}
+```
+
+---
+
+## 베스트 프랙티스
+
+### 1. Coordinator에서 화면 전환
+
+```swift
+// Good: AppFlowCoordinator에서 화면 전환
+private func pushSettingViewController() {
+    let actions = SettingViewModelActions(...)
+    let viewModel = self.appDIContainer.makeSettingViewModel(actions)
+    let viewController = SettingViewController(viewModel)
+    self.bottomView?.push(viewController)
+}
+
+// Bad: ViewController에서 직접 화면 전환
+func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+    let settingVC = SettingViewController(...)  // X
+    navigationController?.pushViewController(settingVC, animated: true)
+}
+```
+
+### 2. actions를 첫 번째 파라미터로 전달
+
+```swift
+// Good
+func makeMainViewModel(_ actions: MainViewModelActions) -> MainViewModel {
+    return DefaultMainViewModel(
+        actions: actions,
+        connecntProviderUseCase: self.makeConnecntProviderUseCase(),
+        ...
+    )
+}
+
+// Bad
+func makeMainViewModel(_ actions: MainViewModelActions) -> MainViewModel {
+    return DefaultMainViewModel(
+        connecntProviderUseCase: self.makeConnecntProviderUseCase(),
+        actions: actions  // X actions는 첫 번째
+    )
+}
+```
+
+### 3. 메모리 관리
+
+```swift
+// Good: BottomView 메모리 해제
+private func popNavigation() {
+    self.navigationController.popViewController(animated: true)
+    self.bottomView = nil  // signout 시 메모리 해제
+    self.bottomContents.removeAll()
+}
+
+// Good: Actions 클로저에서 [weak self] 사용
+let actions = CreateViewModelActions(
+    didCreate: { [weak self] item in
+        self?.navigationController?.popViewController(animated: true)
+    }
+)
+```
+
+---
+
+## 트러블슈팅
+
+### 문제 1: 화면 전환이 동작하지 않음
+
+**원인**: navigationController 또는 bottomView가 nil
+**해결**:
+- Coordinator 초기화 시 navigationController 확인
+- bottomView가 nil인 경우 createBottomView() 호출
+
+### 문제 2: ViewController가 해제되지 않음
+
+**원인**: 순환 참조
+**해결**: Actions 클로저에서 `[weak self]` 사용
+
+### 문제 3: BottomView 메모리 누수
+
+**원인**: signout 시 bottomView가 해제되지 않음
+**해결**: popNavigation()에서 `self.bottomView = nil` 호출
+
+---
+
+## 관련 문서
+
+- [[iOS_Coordinator_DI_v3|DI Container 패턴 (3.0)]]
+- [[iOS_Coordinator_Action_v3|ViewModel Actions 패턴 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|전체 아키텍처 개요]]

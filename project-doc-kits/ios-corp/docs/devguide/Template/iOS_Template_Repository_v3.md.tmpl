@@ -1,0 +1,73 @@
+# iOS Repository 템플릿 (3.0)
+
+> [!abstract]
+> Repository 레이어의 코드 템플릿. Protocol 정의(Domain/Interface)와 Default 구현체(Data/Repository) 템플릿을 제공한다.
+
+---
+
+## Repository 템플릿
+
+### Protocol 템플릿
+
+**파일 위치**: `Domain/Interface/`
+**파일명**: `<#name#>Repository.swift`
+
+```swift
+import Foundation
+
+protocol <#name#>Repository {
+    // protocol 정의
+}
+```
+
+### 구현체 템플릿
+
+**파일 위치**: `Data/Repository/`
+**파일명**: `Default<#name#>Repository.swift`
+
+```swift
+import Foundation
+
+// MARK: - Default<#name#>Repository
+
+final class Default<#name#>Repository {
+
+    // MARK: - Property
+
+
+
+    // MARK: - Life Cycle
+
+    init(
+
+    ) {
+
+    }
+
+
+
+    // MARK: - Private
+
+    private func <#function#>() {
+
+    }
+}
+
+
+
+// MARK: - <#name#>Repository
+
+extension Default<#name#>Repository: <#name#>Repository {
+    // protocol 구현체
+}
+```
+
+---
+
+## 관련 문서
+
+- [[iOS_Template_UseCase_v3|UseCase 템플릿 (3.0)]]
+- [[iOS_Template_Presentation_v3|Presentation 템플릿 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|레이어별 구조 및 위치 규칙]]
+- [[iOS_SwiftStyle_v3|코드 스타일 및 MARK 규칙]]

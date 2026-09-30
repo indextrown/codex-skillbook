@@ -1,0 +1,118 @@
+# iOS RxSwift 바인딩 정책 (3.0)
+
+> [!abstract]
+> RxSwift 바인딩 시 준수해야 할 정책과 주의사항. 메모리 관리, Driver 미사용 정책, 스레드 관리 등을 다룬다.
+
+---
+
+## 주의사항
+
+### 1. 메모리 관리
+
+```swift
+// Good - [weak self] 사용
+output.data
+    .bind { [weak self] data in
+        self?.rootView.updateData(data)
+    }
+    .disposed(by: self.disposeBag)
+
+// Bad - 메모리 누수 위험
+output.data
+    .bind { data in
+        self.rootView.updateData(data)  // strong reference
+    }
+    .disposed(by: self.disposeBag)
+```
+
+### 2. DisposeBag 관리
+
+```swift
+// Good
+.disposed(by: self.disposeBag)
+
+// Bad - disposed 누락
+.bind(to: input.buttonTap)
+// 메모리 누수
+```
+
+### 3. Observable vs Relay
+
+```swift
+// Input: Relay 사용 (에러 방출 없음)
+protocol XXXViewModelInput {
+    var buttonTap: PublishRelay<Void> { get }
+}
+
+// Output: Observable 또는 Relay
+protocol XXXViewModelOutput {
+    var items: Observable<[Item]> { get }
+    var isLoading: BehaviorRelay<Bool> { get }
+}
+```
+
+### 4. Driver 미사용
+
+프로젝트는 **Driver를 사용하지 않고 Observable/Relay를 사용**합니다:
+
+```swift
+// Good
+output.items
+    .bind { [weak self] items in
+        self?.rootView.updateItems(items)
+    }
+    .disposed(by: self.disposeBag)
+
+// Avoid
+output.items
+    .asDriver(onErrorJustReturn: [])
+    .drive { ... }
+```
+
+### 5. Input 생성 시점
+
+```swift
+// Good - 생성 후 개별 바인딩
+let input = DefaultXXXViewModel.Input()
+
+self.rootView.button.rx.tap
+    .bind(to: input.buttonTap)
+    .disposed(by: self.disposeBag)
+
+// Avoid - 생성 시 전달
+let input = DefaultXXXViewModel.Input(
+    buttonTap: self.rootView.button.rx.tap
+)
+```
+
+### 6. 스레드 관리
+
+```swift
+// ViewModel에서 메인 스레드 보장
+output.data
+    .observe(on: MainScheduler.instance)
+    .bind { [weak self] data in
+        self?.rootView.updateData(data)
+    }
+    .disposed(by: self.disposeBag)
+```
+
+### 7. 탭 스로틀
+
+```swift
+// ViewModel transform에서
+input.buttonTap
+    .defaultTapThrottle()  // 중복 탭 방지
+    .bind { [weak self] in
+        self?.useCase.performAction()
+    }
+    .disposed(by: disposeBag)
+```
+
+---
+
+## 관련 문서
+
+- [[iOS_Rx_InputOutput_v3|RxSwift Input/Output 패턴 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_SwiftStyle_v3|코드 스타일 가이드]]

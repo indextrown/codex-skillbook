@@ -1,0 +1,125 @@
+# iOS 개발 가이드 허브 (3.0)
+
+> [!abstract]
+> iOS Navigation 3.0 프로젝트의 개발 가이드 최상위 진입점. 아키텍처부터 Git Flow까지 읽기 순서에 따라 라우팅한다.
+
+---
+
+## 읽기 순서
+
+| 순서 | 문서 | 역할 |
+|------|------|------|
+| 1 | 이 문서 | 최상위 진입 허브 |
+| 2 | [[iOS_Architecture_v3\|아키텍처 가이드]] | Clean Arch + MVVM 5계층 구조 헌법 |
+| 3 | [[iOS_FolderStructure_v3\|폴더 구조 가이드]] | iOS_Navigation 프로젝트 폴더·네이밍 표준 |
+| 4 | [[iOS_CodeMap_v3\|코드 매핑 가이드]] | Spec ↔ 코드 매핑 작성법 |
+| 5 | [[iOS_TemplateHub_v3\|코드 템플릿 허브]] | Domain/Data/Presentation 계층 템플릿 |
+| 6 | [[iOS_RxHub_v3\|RxSwift 허브]] | RxSwift/RxCocoa 바인딩 체계 |
+| 7 | [[iOS_CoordinatorHub_v3\|Coordinator 허브]] | Coordinator + DI Container |
+| 8 | [[iOS_TestHub_v3\|테스트 허브]] | XCTest 테스트 체계 |
+| 9 | [[iOS_SwiftStyle_v3\|Swift 스타일 가이드]] | 네이밍·포매팅·MARK 컨벤션 |
+| 10 | [[iOS_GitFlow_v3\|Git Flow 가이드]] | 브랜치 전략 및 커밋 컨벤션 |
+
+---
+
+## 역할별 필수 문서
+
+### 신규 개발자
+
+| 순서 | 문서 | 내용 |
+|------|------|------|
+| 1 | [[iOS_Architecture_v3\|아키텍처 가이드]] | 프로젝트 구조 이해 |
+| 2 | [[iOS_FolderStructure_v3\|폴더 구조 가이드]] | 파일 위치 규칙 |
+| 3 | [[iOS_SwiftStyle_v3\|Swift 스타일 가이드]] | 코드 스타일 규칙 |
+| 4 | [[iOS_TemplateHub_v3\|코드 템플릿 허브]] | 복사해서 쓰는 템플릿 |
+| 5 | [[iOS_GitFlow_v3\|Git Flow 가이드]] | 브랜치 전략 및 커밋 |
+
+### 기능 개발 시
+
+| 문서 | 용도 |
+|------|------|
+| [[iOS_Architecture_v3\|아키텍처 가이드]] | 레이어별 파일 위치 확인 |
+| [[iOS_CoordinatorHub_v3\|Coordinator 허브]] | 화면 전환 및 DI 구현 |
+| [[iOS_RxHub_v3\|RxSwift 허브]] | ViewModel 바인딩 구현 |
+| [[iOS_CodeMap_v3\|코드 매핑 가이드]] | Spec ↔ 코드 추적 |
+
+### 테스트 작성 시
+
+| 문서 | 용도 |
+|------|------|
+| [[iOS_TestHub_v3\|테스트 허브]] | 테스트 전략 및 Mock 패턴 |
+
+---
+
+## 3.0/4.0 격리 원칙
+
+이 DevGuide는 **Navi 3.0 (iOS_Navigation)** 프로젝트 전용이다.
+
+| 항목 | 규칙 |
+|------|------|
+| DDD 참조 | `30_Shared/10_iOS3.0/` 문서만 참조, `_iOS` 접미사 필수 |
+| 4.0 참조 | 금지 — 4.0 DevGuide는 `50_iOS/Navi4.0/01_DevGuide/`에 별도 관리 |
+| 운영 레이어 | `00_Ops/` 경로 전체 명시하여 참조 |
+| 코드 매핑 | `50_iOS/Navi3.0/02_Mapping/` 문서만 참조 |
+
+---
+
+## 적용 범위
+
+- **대상 프로젝트**: Navi 3.0 iOS (`/Users/ups/Documents/mapsea/iOS_Navigation`)
+- **아키텍처**: Clean Architecture + MVVM + RxSwift (5계층)
+- **기술 스택**: RxSwift 6.x, RxCocoa 6.x, GRDB, SnapKit, Then
+- **Swift 파일**: 608개 (Production) + 85 (Test) + 2 (UITest)
+
+---
+
+## 빠른 참조
+
+### 파일 생성 시 위치
+
+| 파일 타입 | 위치 |
+|-----------|------|
+| UseCase | `Domain/UseCase/[Feature]/` |
+| Repository Protocol | `Domain/Interface/` |
+| Repository 구현체 | `Data/Repository/` |
+| DTO | `Data/DTO/` |
+| ViewModel | `Presentation/[Scene]/[Feature]/ViewModel/` |
+| View/ViewController | `Presentation/[Scene]/[Feature]/View/` |
+| Builder | `Infrastructure/Builder/` |
+| Manager | `Infrastructure/Manager/` |
+
+### 커밋 타입
+
+| 타입 | 용도 |
+|------|------|
+| `[ADD]` | 새 기능 추가 |
+| `[UPDATE]` | 기존 기능 개선 |
+| `[FIX]` | 버그 수정 |
+| `[REFACTOR]` | 코드 리팩토링 |
+| `[TEST]` | 테스트 코드 |
+| `[DOCS]` | 문서 작성 |
+
+### MARK 섹션 순서
+
+```swift
+// MARK: - Property
+// MARK: - Life Cycle
+// MARK: - Interface
+// MARK: - Private
+// MARK: - UI (View 전용)
+```
+
+---
+
+## 관련 문서
+
+- [[iOS_Architecture_v3|iOS 아키텍처 가이드 (3.0)]]
+- [[iOS_FolderStructure_v3|iOS 폴더 구조 가이드 (3.0)]]
+- [[iOS_CodeMap_v3|iOS 코드 매핑 가이드 (3.0)]]
+- [[iOS_TemplateHub_v3|iOS 코드 템플릿 허브 (3.0)]]
+- [[iOS_RxHub_v3|iOS RxSwift 허브 (3.0)]]
+- [[iOS_CoordinatorHub_v3|iOS Coordinator 허브 (3.0)]]
+- [[iOS_TestHub_v3|iOS 테스트 허브 (3.0)]]
+- [[iOS_SwiftStyle_v3|iOS Swift 스타일 가이드 (3.0)]]
+- [[iOS_GitFlow_v3|iOS Git Flow 가이드 (3.0)]]
+- [[00_Ops/ControlPlane/DevGuideStandards|DevGuide 표준]]

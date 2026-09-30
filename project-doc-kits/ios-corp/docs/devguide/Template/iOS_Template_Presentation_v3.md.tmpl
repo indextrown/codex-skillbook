@@ -1,0 +1,373 @@
+# iOS Presentation 템플릿 (3.0)
+
+> [!abstract]
+> Presentation 레이어의 코드 템플릿. View, ViewController, ViewModel의 구현 템플릿을 제공한다.
+
+---
+
+## View 템플릿
+
+**파일 위치**: `Presentation/Scene/[Scene]/[Feature]/View/`
+
+### 추가 섹션
+
+| 섹션 | 용도 |
+|------|------|
+| **Nested Types** | State, Metric 등 내부 타입 정의 |
+| **UI** | setAttribute(), setConstraint() |
+
+```swift
+import UIKit
+
+import RxCocoa
+import RxSwift
+import SnapKit
+import Then
+
+final class <#ViewName#>: BaseView {
+
+    // MARK: - Nested Types
+
+    enum State {
+        case selected
+        case deselected
+    }
+
+    private struct Metric {
+        static let padding: CGFloat = 16.0
+    }
+
+
+
+    // MARK: - Property
+
+    private let titleLabel = UILabel().then { view in
+        view.text = "제목"
+        view.textColor = .white
+        view.font = .systemFont(ofSize: 20.0, weight: .bold)
+    }
+
+    let actionButton = UIButton().then { view in
+        view.setTitle("확인", for: .normal)
+        view.tintColor = .systemBlue
+    }
+
+    private let contentsStackView = UIStackView().then { view in
+        view.axis = .vertical
+        view.spacing = 8.0
+        view.alignment = .fill
+    }
+
+
+
+    // MARK: - Life Cycle
+
+    override init() {
+        super.init()
+
+        self.setAttribute()
+        self.setConstraint()
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+
+
+    // MARK: - Interface
+
+    func updateState(_ state: State) {
+        switch state {
+        case .selected:
+            self.backgroundColor = .systemBlue
+
+        case .deselected:
+            self.backgroundColor = .systemGray
+        }
+    }
+
+    // RxSwift Binder
+    var items: Binder<[String]> {
+        return Binder(self) { view, items in
+            items.forEach { item in
+                let label = UILabel()
+                label.text = item
+                view.contentsStackView.addArrangedSubview(label)
+            }
+        }
+    }
+
+
+
+    // MARK: - Private
+
+    private func handleAction() {
+        // 내부 로직
+    }
+
+
+
+    // MARK: - UI
+
+    private func setAttribute() {
+        self.backgroundColor = .white
+
+        [self.titleLabel, self.actionButton, self.contentsStackView]
+            .forEach(self.addSubview(_:))
+    }
+
+    private func setConstraint() {
+        let guide = self.safeAreaLayoutGuide
+
+        self.titleLabel.snp.makeConstraints { make in
+            make.top.equalTo(guide).offset(Metric.padding)
+            make.leading.trailing.equalTo(guide).inset(Metric.padding)
+        }
+
+        self.actionButton.snp.makeConstraints { make in
+            make.top.equalTo(self.titleLabel.snp.bottom).offset(Metric.padding)
+            make.leading.trailing.equalTo(guide).inset(Metric.padding)
+            make.height.equalTo(44.0)
+        }
+
+        self.contentsStackView.snp.makeConstraints { make in
+            make.top.equalTo(self.actionButton.snp.bottom).offset(Metric.padding)
+            make.leading.trailing.equalTo(guide).inset(Metric.padding)
+            make.bottom.lessThanOrEqualTo(guide).inset(Metric.padding)
+        }
+    }
+}
+```
+
+---
+
+## ViewController 템플릿
+
+**파일 위치**: `Presentation/Scene/[Scene]/[Feature]/View/`
+
+```swift
+import UIKit
+
+import RxCocoa
+import RxSwift
+
+final class <#ViewName#>Controller: UIViewController {
+
+    // MARK: - Property
+
+    private let disposeBag = DisposeBag()
+    private let rootView = <#ViewName#>()
+    private let viewModel: <#ViewName#>Model
+
+
+
+    // MARK: - Life Cycle
+
+    init(_ viewModel: <#ViewName#>Model) {
+        self.viewModel = viewModel
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func loadView() {
+        self.view = self.rootView
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        self.configure()
+        self.bindViewModel()
+    }
+
+
+
+    // MARK: - Private
+
+    private func configure() {
+        // 네비게이션 바, 상태바, 제스처 등 설정
+        self.navigationController?.setNavigationBarHidden(true, animated: false)
+    }
+
+    private func bindViewModel() {
+        let input = Default<#ViewName#>Model.Input()
+
+        // Input 바인딩
+        self.rx.viewDidAppear
+            .bind(to: input.viewDidAppear)
+            .disposed(by: self.disposeBag)
+
+        self.rootView.button.rx.tap
+            .bind(to: input.buttonTap)
+            .disposed(by: self.disposeBag)
+
+        self.rootView.tableView.rx.modelSelected(Item.self)
+            .bind(to: input.itemSelected)
+            .disposed(by: self.disposeBag)
+
+        // Output 바인딩
+        let output = self.viewModel.transform(input: input, disposeBag: self.disposeBag)
+
+        output.items
+            .bind { [weak self] items in
+                self?.rootView.updateItems(items)
+            }
+            .disposed(by: self.disposeBag)
+
+        output.isLoading
+            .unwrap()
+            .bind { [weak self] isLoading in
+                self?.rootView.setLoading(isLoading)
+            }
+            .disposed(by: self.disposeBag)
+    }
+}
+```
+
+---
+
+## ViewModel 템플릿
+
+**파일 위치**: `Presentation/Scene/[Scene]/[Feature]/ViewModel/`
+
+### 추가 섹션
+
+| 섹션 | 용도 |
+|------|------|
+| **Input / Output** | Input/Output struct 정의 |
+| **Transform** | transform 메서드 |
+
+```swift
+import Foundation
+
+import RxCocoa
+import RxSwift
+
+struct <#ViewName#>ViewModelActions {
+    let pushNextViewController: () -> Void
+    let dismissViewController: () -> Void
+}
+
+protocol <#ViewName#>ViewModelInput {
+    var viewDidAppear: PublishRelay<Void> { get }
+    var buttonTap: PublishRelay<Void> { get }
+    var itemSelected: PublishRelay<Item> { get }
+}
+
+protocol <#ViewName#>ViewModelOutput {
+    var items: BehaviorRelay<[Item]> { get }
+    var presentAlert: PublishRelay<Alert> { get }
+}
+
+protocol <#ViewName#>ViewModel {
+    func transform(input: <#ViewName#>ViewModelInput, disposeBag: DisposeBag) -> <#ViewName#>ViewModelOutput
+}
+
+final class Default<#ViewName#>ViewModel: BaseViewModel, <#ViewName#>ViewModel {
+
+    // MARK: - Input / Output
+
+    struct Input: <#ViewName#>ViewModelInput {
+        let viewDidAppear = PublishRelay<Void>()
+        let buttonTap = PublishRelay<Void>()
+        let itemSelected = PublishRelay<Item>()
+    }
+
+    struct Output: <#ViewName#>ViewModelOutput {
+        let items = BehaviorRelay<[Item]>(value: [])
+        let presentAlert = PublishRelay<Alert>()
+    }
+
+
+
+    // MARK: - Property
+
+    private let actions: <#ViewName#>ViewModelActions
+    private let xxxUseCase: XxxUseCase
+
+
+
+    // MARK: - Life Cycle
+
+    init(
+        actions: <#ViewName#>ViewModelActions,
+        xxxUseCase: XxxUseCase
+    ) {
+        self.actions = actions
+        self.xxxUseCase = xxxUseCase
+    }
+
+
+
+    // MARK: - Transform
+
+    func transform(input: <#ViewName#>ViewModelInput, disposeBag: DisposeBag) -> <#ViewName#>ViewModelOutput {
+        let output = Default<#ViewName#>ViewModel.Output()
+
+        // UseCase Observable 구독
+        self.xxxUseCase.observeItems()
+            .observe(on: MainScheduler.instance)
+            .bind(to: output.items)
+            .disposed(by: disposeBag)
+
+        // viewDidAppear: 초기 데이터 로드
+        input.viewDidAppear
+            .flatMapLatest { [weak self] _ -> Observable<[Item]> in
+                guard let self else { return .empty() }
+                return self.xxxUseCase.fetchItems()
+            }
+            .observe(on: MainScheduler.instance)
+            .bind(to: output.items)
+            .disposed(by: disposeBag)
+
+        // buttonTap: 단순 액션 처리
+        input.buttonTap
+            .bind { [weak self] in
+                self?.actions.pushNextViewController()
+            }
+            .disposed(by: disposeBag)
+
+        // itemSelected: 복잡한 분기 처리
+        input.itemSelected
+            .flatMapLatest { [weak self] item -> Observable<Alert?> in
+                guard let self else { return .empty() }
+                return self.xxxUseCase.processItem(item)
+            }
+            .observe(on: MainScheduler.instance)
+            .subscribe(onNext: { [weak self] alert in
+                guard let self else { return }
+                if let alert {
+                    output.presentAlert.accept(alert)
+                } else {
+                    self.actions.dismissViewController()
+                }
+            })
+            .disposed(by: disposeBag)
+
+        return output
+    }
+}
+
+
+
+// MARK: - Private
+
+extension Default<#ViewName#>ViewModel {
+
+}
+```
+
+---
+
+## 관련 문서
+
+- [[iOS_Template_UseCase_v3|UseCase 템플릿 (3.0)]]
+- [[iOS_Template_Repository_v3|Repository 템플릿 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|레이어별 구조 및 위치 규칙]]
+- [[iOS_RxHub_v3|RxSwift 허브 (3.0)]]
+- [[iOS_SwiftStyle_v3|코드 스타일 및 MARK 규칙]]

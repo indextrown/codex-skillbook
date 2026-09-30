@@ -1,0 +1,93 @@
+{
+  "name": "ios-corp",
+  "files": [
+    {
+      "template": "AGENTS.md.tmpl",
+      "target": "AGENTS.md"
+    },
+    {
+      "template": "CLAUDE.md.tmpl",
+      "target": "CLAUDE.md"
+    },
+    {
+      "template": "docs/devguide/_DevGuide_Index_v3.md.tmpl",
+      "target": "docs/devguide/_DevGuide_Index_v3.md"
+    },
+    {
+      "template": "docs/devguide/iOS_Architecture_v3.md.tmpl",
+      "target": "docs/devguide/iOS_Architecture_v3.md"
+    },
+    {
+      "template": "docs/devguide/iOS_CodeMap_v3.md.tmpl",
+      "target": "docs/devguide/iOS_CodeMap_v3.md"
+    },
+    {
+      "template": "docs/devguide/iOS_FolderStructure_v3.md.tmpl",
+      "target": "docs/devguide/iOS_FolderStructure_v3.md"
+    },
+    {
+      "template": "docs/devguide/iOS_GitFlow_v3.md.tmpl",
+      "target": "docs/devguide/iOS_GitFlow_v3.md"
+    },
+    {
+      "template": "docs/devguide/iOS_SwiftStyle_v3.md.tmpl",
+      "target": "docs/devguide/iOS_SwiftStyle_v3.md"
+    },
+    {
+      "template": "docs/devguide/Coordinator/iOS_Coordinator_Action_v3.md.tmpl",
+      "target": "docs/devguide/Coordinator/iOS_Coordinator_Action_v3.md"
+    },
+    {
+      "template": "docs/devguide/Coordinator/iOS_Coordinator_DI_v3.md.tmpl",
+      "target": "docs/devguide/Coordinator/iOS_Coordinator_DI_v3.md"
+    },
+    {
+      "template": "docs/devguide/Coordinator/iOS_Coordinator_Flow_v3.md.tmpl",
+      "target": "docs/devguide/Coordinator/iOS_Coordinator_Flow_v3.md"
+    },
+    {
+      "template": "docs/devguide/Coordinator/iOS_CoordinatorHub_v3.md.tmpl",
+      "target": "docs/devguide/Coordinator/iOS_CoordinatorHub_v3.md"
+    },
+    {
+      "template": "docs/devguide/Rx/iOS_Rx_BindingPolicy_v3.md.tmpl",
+      "target": "docs/devguide/Rx/iOS_Rx_BindingPolicy_v3.md"
+    },
+    {
+      "template": "docs/devguide/Rx/iOS_Rx_InputOutput_v3.md.tmpl",
+      "target": "docs/devguide/Rx/iOS_Rx_InputOutput_v3.md"
+    },
+    {
+      "template": "docs/devguide/Rx/iOS_RxHub_v3.md.tmpl",
+      "target": "docs/devguide/Rx/iOS_RxHub_v3.md"
+    },
+    {
+      "template": "docs/devguide/Template/iOS_Template_Presentation_v3.md.tmpl",
+      "target": "docs/devguide/Template/iOS_Template_Presentation_v3.md"
+    },
+    {
+      "template": "docs/devguide/Template/iOS_Template_Repository_v3.md.tmpl",
+      "target": "docs/devguide/Template/iOS_Template_Repository_v3.md"
+    },
+    {
+      "template": "docs/devguide/Template/iOS_Template_UseCase_v3.md.tmpl",
+      "target": "docs/devguide/Template/iOS_Template_UseCase_v3.md"
+    },
+    {
+      "template": "docs/devguide/Template/iOS_TemplateHub_v3.md.tmpl",
+      "target": "docs/devguide/Template/iOS_TemplateHub_v3.md"
+    },
+    {
+      "template": "docs/devguide/Test/iOS_Test_MockPattern_v3.md.tmpl",
+      "target": "docs/devguide/Test/iOS_Test_MockPattern_v3.md"
+    },
+    {
+      "template": "docs/devguide/Test/iOS_Test_Strategy_v3.md.tmpl",
+      "target": "docs/devguide/Test/iOS_Test_Strategy_v3.md"
+    },
+    {
+      "template": "docs/devguide/Test/iOS_TestHub_v3.md.tmpl",
+      "target": "docs/devguide/Test/iOS_TestHub_v3.md"
+    }
+  ]
+}

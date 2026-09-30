@@ -1,0 +1,107 @@
+# iOS RxSwift 허브 (3.0)
+
+> [!abstract]
+> RxSwift/RxCocoa 바인딩 패턴 진입점. 계층별 Rx 사용 정책과 Input/Output 계약을 다룬다.
+
+---
+
+## 읽기 순서
+
+| 순서 | 문서 | 역할 |
+|------|------|------|
+| 1 | 이 문서 | 진입 허브 — 패턴 요약 |
+| 2 | [[iOS_Rx_BindingPolicy_v3\|계층별 Rx 사용 정책]] | 어떤 계층에서 어떤 Rx 타입을 쓰는가 |
+| 3 | [[iOS_Rx_InputOutput_v3\|Input/Output 계약]] | ViewModel Input/Output 바인딩 규칙 |
+
+---
+
+## Quick Reference
+
+### Input/Output 타입 규칙
+
+| 역할 | Rx 타입 | 이유 |
+|------|---------|------|
+| **Input** (이벤트) | `PublishRelay<T>` | 초기값 없음, 에러 방출 안 함 |
+| **Output** (상태) | `BehaviorRelay<T>` | 초기값 필수, 현재 상태 보유 |
+| **바인딩** | `.bind(to:).disposed(by:)` | 표준 바인딩 체인 |
+| **Transform** | `func transform(input:disposeBag:) -> Output` | 단일 진입 변환 |
+
+### Transform 패턴
+
+```swift
+// ViewModel
+func transform(
+    input: MarkEditInfoViewModelInput,
+    disposeBag: DisposeBag
+) -> MarkEditInfoViewModelOutput {
+    let output = DefaultMarkEditInfoViewModel.Output()
+
+    input.viewWillAppear
+        .bind { [weak self] in
+            self?.markEditUseCase.setEditMode(true)
+        }
+        .disposed(by: disposeBag)
+
+    return output
+}
+```
+
+### ViewController 바인딩 패턴
+
+```swift
+// ViewController
+private func bindViewModel() {
+    let input = DefaultMarkEditInfoViewModel.Input()
+
+    // UI → Input
+    self.viewWillAppearRelay
+        .bind(to: input.viewWillAppear)
+        .disposed(by: self.disposeBag)
+
+    self.rootView.navigationView.popButton.rx.tap
+        .bind(to: input.pop)
+        .disposed(by: self.disposeBag)
+
+    // Transform
+    let output = self.viewModel.transform(input: input, disposeBag: self.disposeBag)
+
+    // Output → UI
+    output.name
+        .bind(to: self.rootView.nameUnitView.rx.text)
+        .disposed(by: self.disposeBag)
+}
+```
+
+### Driver 사용
+
+프로젝트에서 `Driver`는 거의 사용하지 않는다. ViewModel은 `BehaviorRelay`와 `PublishRelay`를 직접 사용한다.
+
+### 메모리 관리
+
+모든 클로저에서 `[weak self]` 사용:
+
+```swift
+input.saveTap
+    .bind { [weak self] in
+        guard let self else { return }
+        self.markEditUseCase.save(...)
+    }
+    .disposed(by: disposeBag)
+```
+
+---
+
+## 적용 범위
+
+- **대상 프로젝트**: Navi 3.0 iOS (`iOS_Navigation`)
+- **기술 스택**: RxSwift 6.x, RxCocoa 6.x
+- **ViewModel 수**: 26개 (모두 동일 Input/Output 구조)
+
+---
+
+## 관련 문서
+
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_TemplateHub_v3|iOS 코드 템플릿 허브 (3.0)]]
+- [[iOS_CoordinatorHub_v3|iOS Coordinator 허브 (3.0)]]
+- [[iOS_Architecture_v3|iOS 아키텍처 가이드 (3.0)]]

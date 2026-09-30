@@ -769,6 +769,73 @@ test('relative targets, traversal paths, and conflicting modes are rejected', as
   assert.deepEqual(fs.readdirSync(root), []);
 });
 
+const CORP_KIT = path.resolve(__dirname, '..', 'project-doc-kits', 'ios-corp');
+
+test('ios-corp copies the development guide templates into docs/devguide unchanged', async (t) => {
+  const root = gitRepository(t);
+  const result = await invoke(
+    ['init', 'ios-corp', '--target', root, '--project-name', 'MyApp'],
+    { tty: true, confirm: true },
+  );
+
+  assert.equal(result.code, 0, result.errors);
+  assert.deepEqual(result.asked, ['docs']);
+  assert.doesNotMatch(result.output, /git hook/u);
+  const kit = JSON.parse(fs.readFileSync(path.join(CORP_KIT, 'kit.json'), 'utf8'));
+  assert.equal(kit.files.length, 22);
+  for (const item of kit.files.filter((entry) => entry.target.startsWith('docs/'))) {
+    assert.match(item.target, /^docs\/devguide\//u);
+    assert.deepEqual(
+      fs.readFileSync(path.join(root, item.target)),
+      fs.readFileSync(path.join(CORP_KIT, item.template)),
+      item.target,
+    );
+  }
+  const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+  assert.match(agents, /^# MyApp 작업 안내/u);
+  for (const [, link] of agents.matchAll(/\]\((docs\/[^)]+)\)/gu)) {
+    assert.ok(fs.existsSync(path.join(root, link)), link);
+  }
+  assert.match(fs.readFileSync(path.join(root, 'CLAUDE.md'), 'utf8'), /^@AGENTS\.md$/mu);
+  const manifest = JSON.parse(fs.readFileSync(manifestPath(root), 'utf8'));
+  assert.equal(manifest.kit, 'ios-corp');
+  assert.equal(Object.keys(manifest.files).length, 22);
+});
+
+test('a project managed by one kit rejects every command for another kit', async (t) => {
+  const root = gitRepository(t);
+  assert.equal((await invoke(['init', 'ios-corp', '--target', root, '--apply'])).code, 0);
+  const before = fs.readFileSync(manifestPath(root));
+
+  for (const args of [
+    ['init', 'ios-uikit', '--target', root, '--apply'],
+    ['hooks', 'ios-uikit', '--target', root, '--apply'],
+    ['contribute', 'ios-uikit', '--all', '--target', root, '--dry-run'],
+  ]) {
+    const result = await invoke(args);
+    assert.equal(result.code, 1, args.join(' '));
+    assert.match(result.errors, /ios-corp 키트로 관리하고 있어요/u);
+  }
+  assert.deepEqual(fs.readFileSync(manifestPath(root)), before);
+  assert.equal(fs.existsSync(path.join(root, 'docs', 'architecture')), false);
+  assert.equal(fs.existsSync(path.join(root, '.githooks')), false);
+});
+
+test('unknown kits are rejected and a kit without git hooks refuses the hooks command', async (t) => {
+  const root = gitRepository(t);
+
+  const unknown = await invoke(['init', 'android', '--target', root, '--apply']);
+  assert.equal(unknown.code, 1);
+  assert.match(unknown.errors, /알 수 없는 키트예요: android/u);
+  assert.match(unknown.errors, /ios-corp, ios-uikit/u);
+  assert.equal((await invoke(['init', '--target', root])).code, 1);
+
+  const hooks = await invoke(['hooks', 'ios-corp', '--target', root, '--apply']);
+  assert.equal(hooks.code, 1);
+  assert.match(hooks.errors, /ios-corp 키트는 git hook을 제공하지 않아요/u);
+  assert.deepEqual(fs.readdirSync(root), ['.git']);
+});
+
 test('the packed CLI runs through npm without adding dependencies to the target', (t) => {
   const packageRoot = path.resolve(__dirname, '..');
   const packDirectory = project(t);
@@ -789,6 +856,8 @@ test('the packed CLI runs through npm without adding dependencies to the target'
   assert.ok(packagedPaths.includes('bin/project-docs.js'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/kit.json'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/CLAUDE.md.tmpl'));
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-corp/kit.json'));
+  assert.ok(packagedPaths.includes('project-doc-kits/ios-corp/docs/devguide/_DevGuide_Index_v3.md.tmpl'));
   assert.equal(packagedPaths.includes('project-doc-kits/ios-uikit/docs/Root.md.tmpl'), false);
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/retired/docs/Root.md.tmpl'));
   assert.ok(packagedPaths.includes('project-doc-kits/ios-uikit/docs/architecture/architecture.md.tmpl'));
@@ -844,7 +913,7 @@ test('README remote examples use the repository package and explicit executable'
     .split('\n')
     .filter((line) => line.startsWith('npx ') && line.includes('--package=github:indextrown/codex-skillbook'));
 
-  assert.equal(remoteCommands.length, 9);
+  assert.equal(remoteCommands.length, 10);
   for (const command of remoteCommands) {
     assert.ok(command.startsWith(expectedPrefix), command);
   }

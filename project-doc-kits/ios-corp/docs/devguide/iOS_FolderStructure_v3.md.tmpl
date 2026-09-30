@@ -1,0 +1,226 @@
+# iOS 폴더 구조 가이드 (3.0)
+
+> [!abstract]
+> iOS Navigation 3.0 프로젝트의 실제 폴더 구조와 파일 배치 규칙. Ground Truth 분석(608개 Swift 파일)에 기반한다.
+
+---
+
+## 최상위 구조
+
+```
+/app
+├── Application/          # DIContainer, FlowCoordinator, AppDelegate, SceneDelegate
+├── Domain/              # 비즈니스 로직 (순수 Swift, UIKit 금지)
+├── Data/                # Repository 구현체, DTO, Model
+├── Infrastructure/      # Manager, Builder, Calculator, Parser, Service, Storage
+├── Presentation/        # ViewController, ViewModel, View (Scene별 구성)
+├── Extension/           # Swift 타입 확장 (28개 파일)
+└── Resource/            # Assets, Fonts, Localization, Firebase 설정
+```
+
+---
+
+## 계층별 상세 구조
+
+### Application Layer
+
+| 파일 | 역할 | 비고 |
+|------|------|------|
+| `AppDelegate.swift` | 앱 라이프사이클 진입점 | UIKit 표준 |
+| `SceneDelegate.swift` | Scene 라이프사이클 (iOS 13+) | UIKit 표준 |
+| `AppDIContainer.swift` | 중앙 의존성 주입 컨테이너 | 45KB, 전체 DI 조율 |
+| `AppFlowCoordinator.swift` | 네비게이션 코디네이터 | 20KB, 화면 전환·팝업 관리 |
+| `AppContents.swift` | 싱글톤 데이터 홀더 | 현재 vessel MMSI 등 앱 상태 |
+
+---
+
+### Domain Layer
+
+```
+Domain/
+├── Entity/                # 비즈니스 모델 (100+ struct)
+│   ├── Camera/           # CameraCommand, CameraMoveRequest, CameraSideEffect
+│   └── OfflineTile/      # 10+ 타일 관련 엔티티
+├── Interface/            # Repository 프로토콜 (29개 + 1 Notifier)
+└── UseCase/              # 비즈니스 로직 (70+)
+    ├── Login/            # SigninUseCase, TrackingUseCase, WebAppUseCase
+    ├── Main/             # 50+ 메인 화면 UseCase
+    ├── OfflineTile/      # 6 오프라인 타일 UseCase
+    ├── Splash/           # 10 스플래시 초기화 UseCase
+    └── Tile/             # StartTileServerUseCase, StopTileServerUseCase
+```
+
+> [!note]
+> Domain 계층은 UIKit import가 금지된다. CoreLocation 등 외부 프레임워크는 Data/Infrastructure에서만 사용한다.
+
+---
+
+### Data Layer
+
+```
+Data/
+├── DTO/                  # Codable 요청/응답 구조체 (20+)
+│   └── OfflineTile/      # 오프라인 타일 DTO 하위 그룹
+├── Model/                # 로컬 데이터 구조체
+│   └── RoutePlanSyncState.swift
+└── Repository/           # Default 구현체 (30+)
+    └── Extension/        # Repository 확장 메서드
+```
+
+---
+
+### Infrastructure Layer
+
+```
+Infrastructure/
+├── Builder/              # 8 빌더 (MarkBuilder, FenderlineBuilder 등)
+├── Calculator/           # 측지 계산 (Bearing, Distance, CPA, Coordinate, RoutePlanMonitoring)
+├── Manager/              # 11 매니저 (System, Location, Toast, Sound, Tracking 등)
+├── Notifier/             # DefaultRoutePlanDeleteNotifier
+├── Parser/               # 데이터 파서
+│   ├── AIS/              # AIS/NMEA 파서
+│   │   ├── Core/         # BitVector, Sixbit
+│   │   ├── Message/      # AISMessage 모델 + 프로토콜
+│   │   ├── NMEA/         # NMEASentenceId, NMEATalkerId, NMEATimestampParser
+│   │   └── Parser/       # 메시지별 파서 (01-05, 18, 19, 24)
+│   ├── RoutePlan/        # CSV (BVS8, Furuno, JRC), RTZ, TXT 파서
+│   └── VesselStatic/     # 선박 정적 데이터 파서
+├── Service/              # Network, Socket, Tile, TileConverter 서비스
+├── SpatialIndex/         # 공간 쿼리 최적화
+├── Storage/              # 저장소 추상화
+│   ├── GRDB/             # DefaultGRDBStorage (멀티 모델)
+│   ├── Tile/             # TileDbCache, TileFileStore, TileDbManager
+│   ├── OfflineTile/      # OfflineTileVersionStorage, TileFileValidator
+│   └── Record/           # GRDB Record 정의 (MarkRecord 등)
+└── Utils/                # 인프라 유틸리티
+```
+
+---
+
+### Presentation Layer
+
+```
+Presentation/
+├── Splash/               # SplashViewController + SplashViewModel
+├── Signin/               # SigninViewController + SigninViewModel
+├── Main/                 # 메인 차트 뷰
+│   ├── View/             # MainViewController, DangerousView, InfoView, ToolboxView
+│   ├── ViewModel/        # MainViewModel, MainInterestViewModel 등
+│   ├── HitTest/          # 맵 인터랙션 히트 테스트
+│   ├── Layer/            # 맵 레이어 관리
+│   └── Router/           # 메인 뷰 네비게이션 라우팅
+├── Bottom/               # 바텀시트 (11개 기능 그룹)
+│   ├── Mark/             # MarkList, MarkDetail, MarkEdit (Info + Style)
+│   ├── MyVessel/         # Fenderline, Docking, Prediction, VesselSetting
+│   ├── RoutePlan/        # RoutePlanList, RoutePlanDetail, RoutePlanEdit
+│   ├── MyFleet/
+│   ├── ENC/
+│   ├── Menu/
+│   ├── MOB/
+│   ├── Delete/
+│   ├── Search/
+│   ├── Setting/
+│   └── Common/           # 공유 UI (Alert, CheckBox, Dropdown 등)
+├── Common/               # BaseViewController, 재사용 UI 컴포넌트
+└── Utils/                # UI 헬퍼 함수
+```
+
+#### Scene 하위 폴더 패턴
+
+```
+Bottom/{Feature}/
+├── Common/               # 기능 공통 컴포넌트
+├── {SubFeature}List/
+│   ├── View/             # {SubFeature}ListViewController
+│   └── ViewModel/        # {SubFeature}ListViewModel
+├── {SubFeature}Detail/
+│   ├── View/
+│   └── ViewModel/
+└── {SubFeature}Edit/
+    ├── {Step}/           # Info, Style 등 편집 단계
+    │   ├── View/
+    │   └── ViewModel/
+    └── ...
+```
+
+---
+
+### Extension Layer
+
+```
+Extension/ (28개 파일)
+├── Foundation:    Extension+String, +Int, +Double, +Date, +Locale
+├── CoreLocation:  Extension+CLLocationCoordinate2D, +CLLocationDegrees
+├── UIKit:         Extension+UIView, +UIButton, +UITextField, +UIColor,
+│                  +UIImage, +UIViewController, +UITableView,
+│                  +UICollectionView, +UIButtonConfiguration
+├── Layout:        Extension+UIEdgeInsets, +NSDirectionalEdgeInsets, +CGSize, +CGFloat
+├── RxSwift:       Extension+Rx, Reactive+UIView, +UIViewController, +UITableView
+└── Utilities:     Extension+NSObject, +URL, +NotificationCenter
+```
+
+---
+
+## 네이밍 규칙
+
+### 구현체 접두사
+
+| 패턴 | 적용 대상 | 예시 |
+|------|---------|------|
+| `Default` 접두사 | Repository·UseCase·ViewModel·Manager·Storage 구현체 | `DefaultMarkRepository`, `DefaultLocationManager` |
+| 접두사 없음 | Protocol, Entity, DTO, Builder, Calculator | `MarkRepository`, `Mark`, `MarkRequest` |
+
+### Extension 파일 네이밍
+
+| 패턴 | 예시 |
+|------|------|
+| `Extension+{Type}.swift` | `Extension+String.swift`, `Extension+UIView.swift` |
+| `Reactive+{Type}.swift` | `Reactive+UIView.swift`, `Reactive+UITableView.swift` |
+
+---
+
+## 파일 배치 규칙
+
+| 파일 유형 | 배치 위치 | 비고 |
+|-----------|----------|------|
+| Entity (struct) | `Domain/Entity/` 또는 하위 폴더 | 순수 Swift, UIKit 금지 |
+| Repository Protocol | `Domain/Interface/` | 파일당 1 프로토콜 |
+| UseCase | `Domain/UseCase/[Feature]/` | 프로토콜 + 구현체 한 파일 |
+| DTO | `Data/DTO/` 또는 하위 폴더 | `Codable` 채택 |
+| Repository 구현체 | `Data/Repository/` | `Default` 접두사 |
+| Builder | `Infrastructure/Builder/` | Scene별 Feature 빌더 |
+| Calculator | `Infrastructure/Calculator/` | 측지·충돌 계산 |
+| Manager | `Infrastructure/Manager/` | Protocol + Default 구현 |
+| Parser | `Infrastructure/Parser/[Category]/` | AIS, RoutePlan 등 |
+| Storage | `Infrastructure/Storage/[Category]/` | GRDB, Tile, Record |
+| Service | `Infrastructure/Service/` | 네트워크·소켓 통신 |
+| ViewController | `Presentation/[Scene]/[Feature]/View/` | `loadView()` + `rootView` |
+| ViewModel | `Presentation/[Scene]/[Feature]/ViewModel/` | Input/Output 패턴 |
+| View (Custom) | `Presentation/[Scene]/[Feature]/View/` | UIView 서브클래스 |
+| Extension | `Extension/` | `Extension+{Type}.swift` |
+
+---
+
+## 파일 통계
+
+| 계층 | 파일 수 | 비고 |
+|------|---------|------|
+| Application | 5 | AppDelegate, SceneDelegate, DIContainer, FlowCoordinator, AppContents |
+| Domain (Entity) | 100+ | struct 기반 비즈니스 모델 |
+| Domain (Interface) | 29 | Repository 프로토콜 + 1 Notifier |
+| Domain (UseCase) | 70+ | 기능별 Stateful UseCase |
+| Data (Repository) | 30+ | Default 구현체 |
+| Data (DTO) | 20+ | Codable 요청/응답 |
+| Infrastructure | 100+ | Manager, Builder, Parser, Storage, Service |
+| Presentation | 280+ | VC(35+), VM(26), View, Router |
+| Extension | 28 | 타입별 확장 |
+| **합계** | **608** | Swift 파일 |
+
+---
+
+## 관련 문서
+
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|iOS 아키텍처 가이드 (3.0)]]
+- [[iOS_TemplateHub_v3|iOS 코드 템플릿 허브 (3.0)]]
+- [[iOS_CodeMap_v3|iOS 코드 매핑 가이드 (3.0)]]

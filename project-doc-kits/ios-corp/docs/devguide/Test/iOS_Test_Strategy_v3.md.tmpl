@@ -1,0 +1,345 @@
+# iOS 테스트 전략 가이드 (3.0)
+
+> [!abstract]
+> MVVM+Clean Architecture 프로젝트를 위한 테스트 전략, 피라미드, 레이어별 접근법, 폴더 구조, 네이밍 규칙을 다룬다.
+
+---
+
+## 테스트 타입
+
+| 구분 | Unit/Integration | UI Tests |
+|------|-----------------|---------|
+| **목적** | 비즈니스 로직, 데이터 처리 | 사용자 관점 동작 |
+| **실행 속도** | 빠름 (ms) | 느림 (초) |
+| **의존성** | Mock/Stub | 실제 환경 |
+| **커버리지** | 70-80% | 10-20% |
+| **범위** | Domain, Data, Presentation | E2E 시나리오 |
+
+---
+
+## 테스트 피라미드
+
+```
+        /\
+       /UI\         ← 10-20% (느림)
+      /----\
+     /      \
+    /Integration\   ← 20-30% (중간)
+   /------------\
+  /              \
+ /   Unit Tests   \ ← 50-70% (빠름)
+ ------------------
+```
+
+### 우선순위
+
+| 필수 테스트 | 선택적 테스트 | 테스트 불필요 |
+|------------|--------------|--------------|
+| 핵심 비즈니스 로직 (UseCase) | 복잡한 UI 로직 | UIKit/SwiftUI 기능 |
+| ViewModel 상태 관리 | 화면 전환 | 단순 getter/setter |
+| 데이터 변환 (DTO → Entity) | 엣지 케이스 | 자동 생성 코드 |
+| 에러 처리 | | |
+
+---
+
+## 레이어별 테스트 전략
+
+### 기본 원칙
+
+> **"로직이 있는 곳에 테스트, 위임만 하는 곳은 하위 레이어에서 커버"**
+
+### 레이어별 테스트 범위
+
+| 레이어 | 테스트 대상 | 테스트 제외 |
+|--------|-----------|-----------|
+| **UseCase** | 비즈니스 분기·조합 로직 | 단순 Repository 호출 위임 |
+| **Repository** | DTO↔Entity 변환, 데이터 조합, 캐싱 | 단순 Manager/Service 패스스루 |
+| **Manager/Service** | 프로토콜 추상화된 로직 | 외부 의존 통합 테스트로 |
+
+### 예시: UseCase 테스트 대상
+
+| UseCase | 테스트 | 이유 |
+|---------|--------|------|
+| `CheckAppVersionUseCase` | O | 버전 비교 분기 로직 |
+| `TokenValidUseCase` | O | 토큰 검증 + 사용자 정보 저장 |
+| `SignInSessionUseCase` | O | 30일 세션 유효성 판단 |
+| `FetchRemoteConfigUseCase` | X | Repository 단순 위임 |
+| `OpenAppStoreUseCase` | X | Manager 단순 위임 |
+
+---
+
+## 폴더 구조
+
+```
+appTests/
+├── Presentation/
+│   └── [Feature]/
+│       ├── [Feature]ViewModelTests.swift    # 메인 테스트 클래스
+│       ├── Mocks/
+│       │   ├── Mock[UseCase1].swift
+│       │   └── Mock[UseCase2].swift
+│       └── Extensions/
+│           ├── [Feature]ViewModelTests+[Category1].swift
+│           └── [Feature]ViewModelTests+[Category2].swift
+│
+├── Domain/
+│   └── UseCase/
+│       └── [UseCaseName]/
+│           ├── [UseCaseName]Tests.swift
+│           └── Mocks/
+│
+└── Data/
+    └── Repository/
+        └── [RepositoryName]/
+            ├── [RepositoryName]Tests.swift
+            └── Mocks/
+```
+
+| 폴더 | 용도 |
+|------|------|
+| 루트 | 메인 테스트 클래스 (setUp/tearDown) |
+| Mocks/ | Mock, Stub, Spy 클래스 |
+| Extensions/ | Spec 섹션별 테스트 케이스 |
+
+---
+
+## 테스트 클래스 구조
+
+### 메인 테스트 클래스
+
+```swift
+import XCTest
+import RxCocoa
+import RxSwift
+@testable import app
+
+/// [Feature]ViewModel 스펙 시나리오를 검증하는 테스트 스위트
+final class [Feature]ViewModelTests: XCTestCase {
+
+    // MARK: - Properties
+
+    var actions: Mock[Feature]ViewActions!
+    var someUseCase: MockSomeUseCase!
+    var sut: Default[Feature]ViewModel!
+    var input: Default[Feature]ViewModel.Input!
+    var disposeBag: DisposeBag!
+
+
+
+    // MARK: - Lifecycle
+
+    override func setUp() {
+        super.setUp()
+        self.actions = Mock[Feature]ViewActions()
+        self.someUseCase = MockSomeUseCase()
+        self.sut = Default[Feature]ViewModel(actions: self.actions.actions, ...)
+        self.input = Default[Feature]ViewModel.Input()
+        self.disposeBag = DisposeBag()
+        _ = self.sut.transform(input: self.input, disposeBag: self.disposeBag)
+    }
+
+    override func tearDown() {
+        self.disposeBag = nil
+        self.input = nil
+        self.sut = nil
+        self.someUseCase = nil
+        self.actions = nil
+        super.tearDown()
+    }
+}
+```
+
+### Extension 파일 구조
+
+```swift
+import XCTest
+@testable import app
+
+// MARK: - [카테고리 설명]
+// Spec 문서: 10.X. [섹션명]
+
+extension [Feature]ViewModelTests {
+
+    // MARK: - Spec 10.X.1
+
+    /// **Spec 10.X.1**: [테스트 제목]?
+    func test[Category]_[condition]_[expected]() { ... }
+}
+```
+
+---
+
+## 무리한 테스트 방지
+
+테스트는 **재현 가능성**과 **유지보수성**을 우선합니다.
+
+### 피해야 할 패턴
+
+- 실제 디바이스 탐색/포맷 선택에 의존
+- 시스템 객체 직접 생성/조작 (`CMSampleBuffer`, `CVPixelBuffer` 등)
+- 런타임 해킹, 비공개 API 사용
+- 타이밍 의존 스트림 재현
+- 테스트 헬퍼에서 `fatalError`로 실패 처리
+
+### 권장 대안
+
+- 시스템 객체를 값 타입 DTO로 추상화
+- 프로토콜 기반 입력 스트림 + 고정 시퀀스
+- 정적 파일/픽스처 기반 테스트
+- 시간 의존 로직은 `Scheduler`/`Clock` 주입
+- 하드웨어 의존은 `XCTSkip`로 환경 의존 명시
+
+### 판단 체크리스트
+
+- [ ] 테스트 결과가 OS/디바이스에 따라 달라질 수 있는가?
+- [ ] 실패 원인이 로직 결함이 아니라 환경 차이일 가능성이 있는가?
+- [ ] 로컬/CI에서 동일하게 재현 가능한가?
+
+---
+
+## 테스트 함수 작성
+
+### Given-When-Then 패턴
+
+```swift
+func testOfflineWithValidSession_pushesMain() {
+    // 1. Given: 테스트 조건 설정
+    self.signInSessionUseCase.hasValidSession = true
+
+    // 2. Expectation 설정
+    let expectation = self.expectation(description: "Push main")
+    self.actions.onPushMain = { expectation.fulfill() }
+
+    // 3. Mock 동작 설정
+    self.fetchUseCase.onExecute = { [weak self] in
+        self?.fetchUseCase.complete()
+    }
+
+    // 4. When: 동작 실행
+    self.input.viewDidAppear.accept(())
+
+    // 5. Then: 결과 검증
+    self.waitForExpectations(timeout: 3.0)
+    XCTAssertEqual(self.actions.pushMainCount, 1)
+    XCTAssertEqual(self.actions.presentLoginCount, 0)
+}
+```
+
+### 레이어별 테스트 특징
+
+| 레이어 | Mock 대상 | 검증 포인트 |
+|--------|----------|-----------|
+| **ViewModel** | UseCase, Actions | Output 상태, Actions 호출 |
+| **UseCase** | Repository, Manager | 비즈니스 로직 분기, 결과 값 |
+| **Repository** | Service, Storage | DTO→Entity 변환, 에러 처리 |
+
+---
+
+## 네이밍 규칙
+
+### 테스트 함수명
+
+**형식**: `test[Category]_[condition]_[expected]`
+
+```swift
+// Good
+func testOfflineWithValidSession_pushesMain()
+func testOnlineWithExpiredToken_presentsLogin()
+
+// Bad
+func test1()
+func testLogin()
+```
+
+### Mock 클래스명
+
+**형식**: `Mock[ProtocolName]`
+
+```swift
+// Good
+MockFetchRemoteConfigUseCase
+MockSplashViewActions
+
+// Bad
+FetchRemoteConfigUseCaseMock
+```
+
+### Extension 파일명
+
+**형식**: `[TestClass]+[Category].swift`
+
+```swift
+SplashViewModelTests+Offline.swift
+SplashViewModelTests+Update.swift
+```
+
+---
+
+## 실행 및 트러블슈팅
+
+### Xcode 단축키
+
+| 단축키 | 기능 |
+|--------|------|
+| `⌘ + U` | 모든 테스트 실행 |
+| `⌃ + ⌥ + ⌘ + U` | 현재 커서의 테스트 실행 |
+| `⌃ + ⌥ + ⌘ + G` | 마지막 테스트 재실행 |
+| `⌘ + 5` | Test Navigator 열기 |
+
+### 터미널 명령어
+
+```bash
+# 모든 테스트
+xcodebuild test -scheme app -destination 'platform=iOS Simulator,name=iPhone 15'
+
+# Unit Tests만
+xcodebuild test -scheme app -only-testing:appTests
+
+# 특정 테스트 클래스
+xcodebuild test -scheme app -only-testing:appTests/SplashViewModelTests
+```
+
+### 코드 커버리지
+
+**목표**: 핵심 로직 80%+, ViewModel/UseCase 70%+, 전체 60%+
+
+### 자주 발생하는 문제
+
+| 문제 | 원인 | 해결 |
+|------|------|------|
+| 테스트가 느림 | 실제 네트워크 호출 | Mock 사용 |
+| Flaky Tests | 타이밍 이슈, 공유 상태 | Expectation, 테스트 격리 |
+| UI 요소 못찾음 | Accessibility ID 누락 | `accessibilityIdentifier` 설정 |
+
+---
+
+## 체크리스트
+
+### 새 테스트 파일 생성 시
+- [ ] 폴더 구조 (Mocks/, Extensions/)
+- [ ] 파일명 네이밍 규칙
+- [ ] `@testable import app`
+
+### Mock 클래스 작성 시
+- [ ] 역할 설명 주석
+- [ ] `xxxCallCount` 호출 추적
+- [ ] `onExecute`, `complete()` 패턴
+- [ ] `[weak self]` 캡처
+
+### 테스트 함수 작성 시
+- [ ] Given-When-Then 패턴
+- [ ] 인라인 주석 (번호 + 설명)
+- [ ] 적절한 타임아웃 (3.0~4.0초)
+
+### 배포 전
+- [ ] 모든 테스트 통과 (`⌘ + U`)
+- [ ] 코드 커버리지 목표 달성
+- [ ] Flaky Test 제거
+
+---
+
+## 관련 문서
+
+- [[iOS_Test_MockPattern_v3|테스트 더블 패턴 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|프로젝트 아키텍처]]

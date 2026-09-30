@@ -1,0 +1,379 @@
+# iOS RxSwift Input/Output 패턴 (3.0)
+
+> [!abstract]
+> RxSwift Input/Output 패턴과 다양한 UI 바인딩 예제를 다룬다.
+
+---
+
+## Input/Output 패턴 개요
+
+프로젝트는 **Input을 먼저 생성하고 이벤트를 개별 바인딩**하는 패턴을 사용합니다.
+
+### 핵심 원칙
+
+| 구분 | 역할 | 타입 |
+|------|------|------|
+| **Input** | View → ViewModel 이벤트 전달 | `PublishRelay`, `BehaviorRelay` |
+| **Output** | ViewModel → View 데이터 전달 | `Observable`, `BehaviorRelay` |
+| **Transform** | Input → Output 변환 | 비즈니스 로직 실행 |
+
+---
+
+## 바인딩 기본 구조
+
+### ViewController의 bindViewModel()
+
+```swift
+private func bindViewModel() {
+    // 1. Input 객체 생성
+    let input = DefaultXXXViewModel.Input()
+
+    // 2. UI 이벤트를 Input에 바인딩
+    self.rootView.button.rx.tap
+        .bind(to: input.buttonTap)
+        .disposed(by: self.disposeBag)
+
+    // 3. Transform 호출하여 Output 받기
+    let output = self.viewModel.transform(input: input, disposeBag: self.disposeBag)
+
+    // 4. Output을 UI에 바인딩
+    output.data
+        .bind { [weak self] data in
+            self?.rootView.updateData(data)
+        }
+        .disposed(by: self.disposeBag)
+}
+```
+
+### ViewModel의 Transform 함수
+
+```swift
+func transform(input: XXXViewModelInput, disposeBag: DisposeBag) -> XXXViewModelOutput {
+    let output = Output()
+
+    // Input 구독 및 비즈니스 로직 실행
+    input.buttonTap
+        .bind { [weak self] in
+            self?.useCase.performAction()
+        }
+        .disposed(by: disposeBag)
+
+    // UseCase 구독 및 Output 업데이트
+    self.useCase.onDataChanged { data in
+        output.data.accept(data)
+    }
+
+    return output
+}
+```
+
+---
+
+## Input 바인딩 패턴
+
+### 1. 탭 이벤트
+
+```swift
+// UIButton
+self.rootView.button.rx.tap
+    .bind(to: input.buttonTap)
+    .disposed(by: self.disposeBag)
+
+// UIBarButtonItem
+self.navigationItem.rightBarButtonItem?.rx.tap
+    .bind(to: input.rightBarButtonTap)
+    .disposed(by: self.disposeBag)
+```
+
+### 2. 라이프사이클 이벤트
+
+```swift
+self.rx.viewDidAppear
+    .bind(to: input.viewDidAppear)
+    .disposed(by: self.disposeBag)
+
+self.rx.viewWillDisappear
+    .bind(to: input.viewWillDisappear)
+    .disposed(by: self.disposeBag)
+```
+
+### 3. 값 매핑
+
+```swift
+// Enum 값 매핑
+self.rootView.eblButton.rx.tap
+    .map { EblVrmContentsType.primaryHoldFirst }
+    .bind(to: input.eblVrmType)
+    .disposed(by: self.disposeBag)
+
+// 복잡한 값 변환
+self.rootView.segmentedControl.rx.selectedSegmentIndex
+    .map { index -> FilterType in
+        switch index {
+        case 0: return .all
+        case 1: return .active
+        default: return .inactive
+        }
+    }
+    .bind(to: input.filterType)
+    .disposed(by: self.disposeBag)
+```
+
+### 4. 값 변경 이벤트
+
+```swift
+// UISwitch
+self.rootView.switchView.rx.isOn
+    .bind(to: input.isSwitchOn)
+    .disposed(by: self.disposeBag)
+
+// UISlider
+self.rootView.slider.rx.value
+    .map { Int($0) }
+    .bind(to: input.sliderValue)
+    .disposed(by: self.disposeBag)
+```
+
+### 5. TableView/CollectionView 선택
+
+```swift
+// 단일 선택
+self.rootView.tableView.rx.modelSelected(MyModel.self)
+    .bind(to: input.itemTap)
+    .disposed(by: self.disposeBag)
+
+// IndexPath와 모델 동시 전달
+Observable.zip(
+    self.rootView.tableView.rx.itemSelected,
+    self.rootView.tableView.rx.modelSelected(MyModel.self)
+)
+.bind { [weak self] indexPath, model in
+    self?.rootView.tableView.deselectRow(at: indexPath, animated: true)
+    input.itemTap.accept(model)
+}
+.disposed(by: self.disposeBag)
+```
+
+### 6. TextField 텍스트
+
+```swift
+// 일반 텍스트
+self.rootView.textField.rx.text
+    .orEmpty
+    .bind(to: input.searchText)
+    .disposed(by: self.disposeBag)
+
+// 디바운스 적용
+self.rootView.searchTextField.rx.text
+    .orEmpty
+    .debounce(.milliseconds(300), scheduler: MainScheduler.instance)
+    .bind(to: input.searchQuery)
+    .disposed(by: self.disposeBag)
+```
+
+### 7. 중복 제거
+
+```swift
+self.rootView.cameraChanged
+    .distinctUntilChanged()
+    .bind(to: input.cameraChanged)
+    .disposed(by: self.disposeBag)
+```
+
+### 8. 여러 Input 결합
+
+```swift
+// combineLatest
+Observable.combineLatest(
+    self.rootView.nameTextField.rx.text.orEmpty,
+    self.rootView.emailTextField.rx.text.orEmpty
+)
+.map { name, email in
+    FormData(name: name, email: email)
+}
+.bind(to: input.formData)
+.disposed(by: self.disposeBag)
+
+// merge
+Observable.merge(
+    self.rootView.backButton.rx.tap.map { _ in },
+    self.rootView.closeButton.rx.tap.map { _ in }
+)
+.bind(to: input.dismiss)
+.disposed(by: self.disposeBag)
+```
+
+---
+
+## Output 바인딩 패턴
+
+### 1. 텍스트 바인딩
+
+```swift
+// UILabel
+output.userName
+    .bind(to: self.rootView.label.rx.text)
+    .disposed(by: self.disposeBag)
+
+// UIButton 타이틀
+output.buttonTitle
+    .bind(to: self.rootView.button.rx.title(for: .normal))
+    .disposed(by: self.disposeBag)
+```
+
+### 2. 복잡한 UI 업데이트
+
+```swift
+// View의 Binder 활용 (권장)
+output.itemData
+    .bind(to: self.rootView.itemData)
+    .disposed(by: self.disposeBag)
+
+// 클로저 직접 사용
+output.itemData
+    .bind { [weak self] data in
+        self?.rootView.updateItemInfo(data)
+    }
+    .disposed(by: self.disposeBag)
+```
+
+### 3. Optional 처리
+
+```swift
+output.cogValue
+    .unwrap()
+    .bind { [weak self] value in
+        self?.rootView.slider.value = Float(value)
+    }
+    .disposed(by: self.disposeBag)
+```
+
+### 4. TableView 바인딩
+
+```swift
+output.items
+    .bind(
+        to: self.rootView.tableView.rx.items(
+            cellIdentifier: Cell.identifier,
+            cellType: Cell.self
+        )
+    ) { row, element, cell in
+        cell.configure(element)
+    }
+    .disposed(by: self.disposeBag)
+```
+
+### 5. 조건부 UI
+
+```swift
+// 표시/숨김
+output.hasData
+    .map { !$0 }
+    .bind(to: self.rootView.emptyView.rx.isHidden)
+    .disposed(by: self.disposeBag)
+
+// 색상 변경
+output.status
+    .map { status -> UIColor in
+        switch status {
+        case .active: return .systemGreen
+        case .inactive: return .systemGray
+        case .error: return .systemRed
+        }
+    }
+    .bind(to: self.rootView.statusIndicator.rx.backgroundColor)
+    .disposed(by: self.disposeBag)
+```
+
+### 6. 로딩 상태
+
+```swift
+output.isLoading
+    .bind(to: self.rootView.activityIndicator.rx.isAnimating)
+    .disposed(by: self.disposeBag)
+
+output.isLoading
+    .map { !$0 }
+    .bind(to: self.rootView.contentView.rx.isHidden)
+    .disposed(by: self.disposeBag)
+```
+
+---
+
+## View의 Binder 패턴
+
+View의 `// MARK: - Interface` 섹션에 Binder를 정의하여 복잡한 UI 업데이트를 캡슐화합니다.
+
+### Binder 정의
+
+```swift
+final class SettingsView: BaseView {
+
+    // MARK: - Interface
+
+    // 여러 UI 컴포넌트 동시 업데이트
+    var itemData: Binder<ItemDisplayModel> {
+        return Binder(self) { view, data in
+            view.nameLabel.text = data.name
+            view.detailLabel.text = data.description
+            view.updateMapPosition(data.position)
+        }
+    }
+
+    // 애니메이션 포함
+    var isEditMode: Binder<Bool> {
+        return Binder(self) { view, isEditMode in
+            UIView.animate(withDuration: 0.3) {
+                view.editButton.setTitle(isEditMode ? "완료" : "편집", for: .normal)
+                view.addButton.alpha = isEditMode ? 1.0 : 0.0
+                view.layoutIfNeeded()
+            }
+        }
+    }
+
+    // 동적 View 생성
+    var permissionViewModels: Binder<[SettingsPermissionViewModel]> {
+        return Binder(self) { view, viewModels in
+            viewModels.forEach { viewModel in
+                let permissionView = SettingsPermissionView(viewModel)
+                view.contentsStackView.addArrangedSubview(permissionView)
+            }
+        }
+    }
+}
+```
+
+### Binder 사용
+
+```swift
+private func bindViewModel() {
+    let output = self.viewModel.transform(input: input, disposeBag: self.disposeBag)
+
+    output.itemData
+        .bind(to: self.rootView.itemData)  // Binder 활용
+        .disposed(by: self.disposeBag)
+
+    output.isEditMode
+        .bind(to: self.rootView.isEditMode)  // Binder 활용
+        .disposed(by: self.disposeBag)
+}
+```
+
+### Binder vs 클로저
+
+| 상황 | 권장 |
+|------|------|
+| 여러 UI 컴포넌트 동시 업데이트 | **Binder** |
+| 애니메이션, 레이아웃 변경 포함 | **Binder** |
+| 재사용 가능한 로직 | **Binder** |
+| 단순한 단일 프로퍼티 바인딩 | 클로저 또는 RxCocoa 기본 |
+| 일회성 로직 | 클로저 |
+
+---
+
+## 관련 문서
+
+- [[iOS_Rx_BindingPolicy_v3|RxSwift 바인딩 정책 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Template_Presentation_v3|Presentation 템플릿 (3.0)]]
+- [[iOS_SwiftStyle_v3|코드 스타일 가이드]]

@@ -3,22 +3,20 @@
 'use strict';
 
 const fs = require('node:fs/promises');
-const { constants } = require('node:fs');
+const { constants, existsSync, readdirSync } = require('node:fs');
 const { execFileSync, spawnSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const readline = require('node:readline/promises');
 
-const KIT_NAME = 'ios-uikit';
-const KIT_DIRECTORY = path.resolve(__dirname, '..', 'project-doc-kits', KIT_NAME);
+const KITS_DIRECTORY = path.resolve(__dirname, '..', 'project-doc-kits');
 const MANIFEST_SEGMENTS = ['.project-docs', 'manifest.json'];
 const SUPPORTED_INCLUDES = new Set(['gitflow', 'rxswift']);
 const ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'TRACK', 'DELETE', 'RETIRED']);
 const PRESERVED_STATUSES = new Set(['SKIP_MODIFIED', 'SKIP_UNTRACKED', 'SKIP_RETIRED_MODIFIED']);
 const HOOK_ACTIONABLE_STATUSES = new Set(['CREATE', 'UPDATE', 'SET', 'ADD']);
 const HOOK_DECISION_KEY = 'project-docs.gitHooks';
-const HOOK_COMMAND = 'npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-uikit';
 const COMMAND_OPTIONS = {
   init: ['--target', '--project-name', '--include', '--dry-run', '--apply'],
   hooks: ['--target', '--dry-run', '--apply'],
@@ -27,12 +25,32 @@ const COMMAND_OPTIONS = {
 const CONTRIBUTE_REPOSITORY = 'indextrown/codex-skillbook';
 const CONTRIBUTE_BASE_BRANCH = 'main';
 
+// project-doc-kits 아래에서 kit.json이 있는 폴더를 키트로 인식해요.
+function availableKits() {
+  return readdirSync(KITS_DIRECTORY, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^[a-z0-9][a-z0-9-]*$/u.test(entry.name)
+      && existsSync(path.join(KITS_DIRECTORY, entry.name, 'kit.json')))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function kitDirectory(kit) {
+  return path.join(KITS_DIRECTORY, kit);
+}
+
+function hookCommand(kit) {
+  return `npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ${kit}`;
+}
+
 const USAGE = `사용법:
-  project-docs init ios-uikit [--target /absolute/path] [--project-name 이름]
-                              [--dry-run | --apply]
-  project-docs hooks ios-uikit [--target /absolute/path] [--dry-run | --apply]
-  project-docs contribute ios-uikit (<문서 경로>... | --all) [--target /absolute/path]
-                              [--project-name 이름] [--title PR 제목] [--dry-run | --apply]
+  project-docs init <키트> [--target /absolute/path] [--project-name 이름]
+                          [--dry-run | --apply]
+  project-docs hooks <키트> [--target /absolute/path] [--dry-run | --apply]
+  project-docs contribute <키트> (<문서 경로>... | --all) [--target /absolute/path]
+                          [--project-name 이름] [--title PR 제목] [--dry-run | --apply]
+
+키트:
+  ${availableKits().join(', ')}
 
 명령:
   init   문서 키트를 적용해요. 터미널에서는 git hook 설정 여부도 한 번 물어요.
@@ -49,19 +67,23 @@ const USAGE = `사용법:
   --all           contribute에서 마지막 적용 뒤 수정한 문서를 모두 올림
   --help          사용법 표시
 
-현재 키트의 문서는 모두 기본 생성해요.
-이전 명령의 --include gitflow과 --include rxswift도 호환을 위해 허용해요.
+키트의 문서는 모두 기본 생성해요.
+ios-uikit의 이전 명령에 쓰던 --include gitflow과 --include rxswift도 호환을 위해 허용해요.
 `;
 
 function parseArguments(args) {
   if (args.includes('--help') || args.includes('-h')) {
     return { help: true };
   }
-  if (!Object.hasOwn(COMMAND_OPTIONS, args[0]) || args[1] !== KIT_NAME) {
-    throw new Error(`지원하는 명령은 "init ${KIT_NAME}", "hooks ${KIT_NAME}", "contribute ${KIT_NAME}"뿐이에요.\n${USAGE}`);
+  if (!Object.hasOwn(COMMAND_OPTIONS, args[0])) {
+    throw new Error(`지원하는 명령은 init, hooks, contribute뿐이에요.\n${USAGE}`);
+  }
+  const kits = availableKits();
+  if (!kits.includes(args[1])) {
+    throw new Error(`${args[1] ? `알 수 없는 키트예요: ${args[1]}` : '키트를 지정해 주세요.'}\n지원하는 키트: ${kits.join(', ')}`);
   }
 
-  const options = { command: args[0], dryRun: false, apply: false, include: new Set(), files: [] };
+  const options = { command: args[0], kit: args[1], dryRun: false, apply: false, include: new Set(), files: [] };
   const allowedFlags = COMMAND_OPTIONS[options.command];
   const seen = new Set();
   for (let index = 2; index < args.length; index += 1) {
@@ -158,18 +180,18 @@ function contentHash(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
-function serializeManifest(files) {
+function serializeManifest(kit, files) {
   return Buffer.from(`${JSON.stringify({
-    kit: KIT_NAME,
+    kit,
     files: Object.fromEntries([...files].sort(([left], [right]) => left.localeCompare(right))),
   }, null, 2)}\n`, 'utf8');
 }
 
-async function loadManifest(root) {
+async function loadManifest(root, kit) {
   await inspectParents(root, MANIFEST_SEGMENTS);
   const destination = path.join(root, ...MANIFEST_SEGMENTS);
   const stats = await lstatOrNull(destination);
-  if (!stats) return { destination, exists: false, files: new Map() };
+  if (!stats) return { destination, exists: false, kit, files: new Map() };
   if (stats.isSymbolicLink() || !stats.isFile()) {
     throw new Error(`문서 관리 파일이 일반 파일이 아니거나 심볼릭 링크예요: ${destination}`);
   }
@@ -183,7 +205,11 @@ async function loadManifest(root) {
     }
     throw error;
   }
-  if (!parsed || Array.isArray(parsed) || parsed.kit !== KIT_NAME
+  // 한 프로젝트는 키트 하나로만 관리해요. 다른 키트의 문서를 관리 종료로 지우지 않게 막아요.
+  if (parsed && !Array.isArray(parsed) && typeof parsed.kit === 'string' && parsed.kit !== kit) {
+    throw new Error(`이 프로젝트는 ${parsed.kit} 키트로 관리하고 있어요. ${kit} 키트는 함께 적용할 수 없어요: ${destination}`);
+  }
+  if (!parsed || Array.isArray(parsed) || parsed.kit !== kit
       || !parsed.files || Array.isArray(parsed.files) || typeof parsed.files !== 'object') {
     throw new Error(`문서 관리 파일의 구조가 올바르지 않아요: ${destination}`);
   }
@@ -196,7 +222,7 @@ async function loadManifest(root) {
     }
     files.set(target, hash);
   }
-  return { destination, exists: true, files };
+  return { destination, exists: true, kit, files };
 }
 
 function markdownText(value) {
@@ -214,13 +240,13 @@ function renderTemplate(source, projectName) {
   return Buffer.from(rendered, 'utf8');
 }
 
-async function loadEntries(projectName) {
-  const manifest = JSON.parse(await fs.readFile(path.join(KIT_DIRECTORY, 'kit.json'), 'utf8'));
-  if (manifest.name !== KIT_NAME || !Array.isArray(manifest.files)
+async function loadEntries(kit, projectName) {
+  const manifest = JSON.parse(await fs.readFile(path.join(kitDirectory(kit), 'kit.json'), 'utf8'));
+  if (manifest.name !== kit || !Array.isArray(manifest.files)
       || (manifest.retiredFiles !== undefined && !Array.isArray(manifest.retiredFiles))) {
     throw new Error('키트 설정을 읽을 수 없어요.');
   }
-  const kitRoot = await fs.realpath(KIT_DIRECTORY);
+  const kitRoot = await fs.realpath(kitDirectory(kit));
   const knownTargets = new Set();
   const configuredTargets = new Set();
   const entries = [];
@@ -476,7 +502,7 @@ async function deleteRetiredEntry(root, entry, trackedHash) {
 
 async function writeManifest(root, manifest, files) {
   if (!manifest.exists && files.size === 0) return;
-  const content = serializeManifest(files);
+  const content = serializeManifest(manifest.kit, files);
   await ensureParents(root, MANIFEST_SEGMENTS);
   const existing = await lstatOrNull(manifest.destination);
   if (existing && (existing.isSymbolicLink() || !existing.isFile())) {
@@ -504,9 +530,11 @@ function gitOrThrow(root, args) {
   return output;
 }
 
-async function loadGitHooks() {
-  const manifest = JSON.parse(await fs.readFile(path.join(KIT_DIRECTORY, 'kit.json'), 'utf8'));
+// git hook은 선택 기능이라 gitHooks 설정이 없는 키트는 null을 돌려줘요.
+async function loadGitHooks(kit) {
+  const manifest = JSON.parse(await fs.readFile(path.join(kitDirectory(kit), 'kit.json'), 'utf8'));
   const config = manifest.gitHooks;
+  if (config === undefined) return null;
   if (!config || typeof config !== 'object' || !Array.isArray(config.files)) {
     throw new Error('키트의 git hook 설정을 읽을 수 없어요.');
   }
@@ -514,7 +542,7 @@ async function loadGitHooks() {
   if (directorySegments.length !== 1) {
     throw new Error(`git hook 디렉터리는 프로젝트 루트 바로 아래여야 해요: ${config.directory}`);
   }
-  const kitRoot = await fs.realpath(KIT_DIRECTORY);
+  const kitRoot = await fs.realpath(kitDirectory(kit));
   const files = [];
   for (const item of config.files) {
     if (typeof item.name !== 'string' || !/^[a-z][a-z-]*$/u.test(item.name)) {
@@ -705,10 +733,12 @@ function printHookResults(io, results) {
 
 // init 뒤에 이어지는 선택 단계예요. hook을 요청하지 않은 사용자의 종료 코드는 바꾸지 않아요.
 async function offerGitHooks(root, options, io) {
-  const declinedHint = `안내: git hook 설정을 거절한 기록이 있어 묻지 않았어요. 설정하려면 ${HOOK_COMMAND}을 실행해요.\n`;
+  const command = hookCommand(options.kit);
+  const declinedHint = `안내: git hook 설정을 거절한 기록이 있어 묻지 않았어요. 설정하려면 ${command}을 실행해요.\n`;
   let plan;
   try {
-    const hooks = await loadGitHooks();
+    const hooks = await loadGitHooks(options.kit);
+    if (!hooks) return 0;
     // 거절했고 아직 설정하지 않은 저장소는 hook 경로를 살펴보지 않고 넘어가요.
     if (git(root, ['config', '--local', '--get', HOOK_DECISION_KEY]) === 'declined'
         && git(root, ['config', '--get', 'core.hooksPath']) !== hooks.directory) {
@@ -735,7 +765,7 @@ async function offerGitHooks(root, options, io) {
     return 0;
   }
   if (options.apply || !io.stdin.isTTY || !io.stdout.isTTY) {
-    io.stdout.write(`안내: push 전 Claude 코드 리뷰 git hook은 ${HOOK_COMMAND}으로 설정할 수 있어요.\n`);
+    io.stdout.write(`안내: push 전 Claude 코드 리뷰 git hook은 ${command}으로 설정할 수 있어요.\n`);
     return 0;
   }
 
@@ -746,7 +776,7 @@ async function offerGitHooks(root, options, io) {
   if (!(await askConfirmation(io, question, 'hooks'))) {
     if (!plan.configured) {
       gitOrThrow(root, ['config', '--local', HOOK_DECISION_KEY, 'declined']);
-      io.stdout.write(`git hook을 설정하지 않았어요. 다시 묻지 않아요. 나중에 설정하려면 ${HOOK_COMMAND}을 실행해요.\n`);
+      io.stdout.write(`git hook을 설정하지 않았어요. 다시 묻지 않아요. 나중에 설정하려면 ${command}을 실행해요.\n`);
     } else {
       io.stdout.write('git hook 변경을 적용하지 않았어요.\n');
     }
@@ -758,7 +788,14 @@ async function offerGitHooks(root, options, io) {
 }
 
 async function runHooks(root, options, io) {
-  const plan = await inspectGitHooks(root, await loadGitHooks());
+  // 다른 키트로 관리하는 프로젝트에는 이 키트의 hook도 설정하지 않아요.
+  await loadManifest(root, options.kit);
+  const hooks = await loadGitHooks(options.kit);
+  if (!hooks) {
+    io.stderr.write(`오류: ${options.kit} 키트는 git hook을 제공하지 않아요.\n`);
+    return 1;
+  }
+  const plan = await inspectGitHooks(root, hooks);
   if (!plan.available) {
     io.stderr.write(`오류: ${plan.reason}\n`);
     return 1;
@@ -806,10 +843,10 @@ function runOrThrow(command, args, message, options = {}) {
   return result.stdout.trim();
 }
 
-async function loadRemoteTemplates(checkout) {
-  const kitRoot = await fs.realpath(path.join(checkout, 'project-doc-kits', KIT_NAME));
+async function loadRemoteTemplates(checkout, kit) {
+  const kitRoot = await fs.realpath(path.join(checkout, 'project-doc-kits', kit));
   const manifest = JSON.parse(await fs.readFile(path.join(kitRoot, 'kit.json'), 'utf8'));
-  if (manifest.name !== KIT_NAME || !Array.isArray(manifest.files)) {
+  if (manifest.name !== kit || !Array.isArray(manifest.files)) {
     throw new Error('원격 키트 설정을 읽을 수 없어요.');
   }
   const templates = new Map();
@@ -820,7 +857,7 @@ async function loadRemoteTemplates(checkout) {
     if (!stats || stats.isSymbolicLink() || !stats.isFile() || !isWithin(kitRoot, await fs.realpath(templatePath))) {
       throw new Error(`원격 템플릿을 읽을 수 없어요: ${item.template}`);
     }
-    templates.set(item.target, { path: templatePath, repositoryPath: `project-doc-kits/${KIT_NAME}/${item.template}` });
+    templates.set(item.target, { path: templatePath, repositoryPath: `project-doc-kits/${kit}/${item.template}` });
   }
   return templates;
 }
@@ -903,8 +940,8 @@ async function listContributable(root, manifest, entries) {
 async function runContribute(root, options, io) {
   const rawName = (options.projectName || path.basename(root)).trim();
   const projectName = markdownText(rawName);
-  const manifest = await loadManifest(root);
-  const { entries } = await loadEntries(projectName);
+  const manifest = await loadManifest(root, options.kit);
+  const { entries } = await loadEntries(options.kit, projectName);
   const byTarget = new Map(entries.map((entry) => [entry.target, entry]));
 
   const candidates = options.all || options.files.length === 0
@@ -950,7 +987,7 @@ async function runContribute(root, options, io) {
     runOrThrow('git', [
       'clone', '--quiet', '--depth', '1', '--branch', CONTRIBUTE_BASE_BRANCH, contributeRepositoryUrl(), checkout,
     ], '저장소를 가져오지 못했어요.');
-    const templates = await loadRemoteTemplates(checkout);
+    const templates = await loadRemoteTemplates(checkout, options.kit);
     const changed = [];
     for (const entry of selected) {
       const remoteTemplate = templates.get(entry.target);
@@ -1027,7 +1064,7 @@ async function runContribute(root, options, io) {
     }
     io.stdout.write(`PR               ${url.split('\n').pop()}\n`);
     io.stdout.write('안내: draft PR의 본문에 변경 이유를 채운 뒤 리뷰를 요청해 주세요.\n');
-    io.stdout.write(`안내: PR이 merge된 뒤 init ${KIT_NAME}을 실행하면 이 문서가 다시 키트 관리 대상(TRACK)이 돼요.\n`);
+    io.stdout.write(`안내: PR이 merge된 뒤 init ${options.kit}을 실행하면 이 문서가 다시 키트 관리 대상(TRACK)이 돼요.\n`);
     return 0;
   } finally {
     await fs.rm(workspace, { recursive: true, force: true });
@@ -1065,8 +1102,8 @@ async function run(args, io = { stdin: process.stdin, stdout: process.stdout, st
     if (options.command === 'hooks') return await runHooks(root, options, io);
     if (options.command === 'contribute') return await runContribute(root, options, io);
     const projectName = markdownText(options.projectName || path.basename(root));
-    const manifest = await loadManifest(root);
-    const { entries, knownTargets, retiredEntries } = await loadEntries(projectName);
+    const manifest = await loadManifest(root, options.kit);
+    const { entries, knownTargets, retiredEntries } = await loadEntries(options.kit, projectName);
     const plan = [];
     for (const entry of entries) {
       plan.push(await inspectEntry(root, entry, manifest.files.get(entry.target)));

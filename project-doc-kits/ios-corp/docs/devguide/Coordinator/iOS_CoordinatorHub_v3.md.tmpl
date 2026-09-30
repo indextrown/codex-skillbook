@@ -1,0 +1,118 @@
+# iOS Coordinator 허브 (3.0)
+
+> [!abstract]
+> Coordinator + DI Container 패턴 진입점. FlowCoordinator, DIContainer, ViewModel Actions 계약을 다룬다.
+
+---
+
+## 읽기 순서
+
+| 순서 | 문서 | 역할 |
+|------|------|------|
+| 1 | 이 문서 | 진입 허브 — 패턴 요약 |
+| 2 | [[iOS_Coordinator_Flow_v3\|FlowCoordinator 패턴]] | 네비게이션 흐름 관리 |
+| 3 | [[iOS_Coordinator_DI_v3\|DIContainer 패턴]] | 의존성 주입 컨테이너 |
+| 4 | [[iOS_Coordinator_Action_v3\|ViewModel Actions 계약]] | ViewModel ↔ Coordinator 통신 |
+
+---
+
+## Quick Reference
+
+### AppFlowCoordinator
+
+단일 `UINavigationController`를 받아 모든 화면 전환을 관리한다.
+
+```swift
+final class AppFlowCoordinator {
+    private let navigationController: UINavigationController
+    private var bottomView: BottomView?  // MainVC와 공유
+    private var bottomContents: [BottomContents] = [.menu]
+}
+```
+
+### AppMessage enum
+
+Coordinator가 처리하는 모달/알림 유형:
+
+```swift
+enum AppMessage {
+    case alert(PopupViewContents)
+    case alertTextField(AlertTextFieldContents)
+    case alertPicker(AlertPickerContents)
+    case alertCalendar(AlertCalendarContents)
+    case toast(ToastContents)
+    case popup(PopupViewContents)
+}
+```
+
+### BottomViewAction enum
+
+ViewModel → Coordinator 네비게이션 요청:
+
+```swift
+enum BottomViewAction {
+    case pushNavigation(ViewController)
+    case popNavigation
+    case replaceNavigation(ViewController)
+    case dismissPopup
+}
+```
+
+### DI 패턴 (AppDIContainer)
+
+Factory method + lazy shared instance 방식. 의존성 생성은 bottom-up 순서를 따른다.
+
+```swift
+final class AppDIContainer {
+    // Storage (lazy shared)
+    private lazy var sharedGRDBStorage: GRDBStorage = {
+        return DefaultGRDBStorage(dbWriter: DatabaseManager.shared.dbWriter)
+    }()
+
+    // Factory: Storage → Repository → UseCase → ViewModel
+    private func makeMarkStorage() -> MarkStorage { ... }
+    private func makeMarkRepository() -> MarkRepository { ... }
+    private func makeMarkEditUseCase() -> MarkEditUseCase { ... }
+    private func makeMarkEditInfoViewModel(...) -> MarkEditInfoViewModel { ... }
+}
+```
+
+### DI 특성
+
+- 생성자 주입 (Constructor Injection) 방식
+- Service Locator 패턴 미사용
+- ViewModel은 매번 새로 생성, Storage/Repository/UseCase는 lazy 공유
+- DIContainer를 FlowCoordinator에 전달하여 런타임 생성
+
+### ViewModel Actions 패턴
+
+ViewModel이 Coordinator에 전달하는 액션 클로저:
+
+```swift
+struct MarkEditInfoViewModelActions {
+    let showAppMessage: (AppMessage) -> Void
+    let actionBottomView: (BottomViewAction) -> Void
+}
+```
+
+### Bottom Sheet 관리
+
+- `bottomView`는 FlowCoordinator에서 1회 생성, MainVC와 공유
+- Sign-out 시 `self.bottomView = nil`로 메모리 정리
+- `bottomContents` 배열로 네비게이션 스택 관리
+
+---
+
+## 적용 범위
+
+- **대상 프로젝트**: Navi 3.0 iOS (`iOS_Navigation`)
+- **핵심 파일**: `AppFlowCoordinator.swift` (20KB), `AppDIContainer.swift` (45KB)
+
+---
+
+## 관련 문서
+
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|iOS 아키텍처 가이드 (3.0)]]
+- [[iOS_TemplateHub_v3|iOS 코드 템플릿 허브 (3.0)]]
+- [[iOS_RxHub_v3|iOS RxSwift 허브 (3.0)]]

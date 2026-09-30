@@ -1,0 +1,129 @@
+# iOS 코드 템플릿 허브 (3.0)
+
+> [!abstract]
+> Domain/Data/Presentation 계층별 코드 템플릿 진입점. 세부 템플릿은 읽기 순서에 따라 확인한다.
+
+---
+
+## 읽기 순서
+
+| 순서 | 문서 | 역할 |
+|------|------|------|
+| 1 | 이 문서 | 진입 허브 — 패턴 요약 |
+| 2 | [[iOS_Template_UseCase_v3\|UseCase 템플릿]] | Domain UseCase 프로토콜 + 구현체 |
+| 3 | [[iOS_Template_Repository_v3\|Repository 템플릿]] | Interface 프로토콜 + Data 구현체 |
+| 4 | [[iOS_Template_Presentation_v3\|Presentation 템플릿]] | ViewModel + ViewController + View |
+
+---
+
+## Quick Reference
+
+### UseCase 패턴
+
+- **위치**: `Domain/UseCase/[Feature]/`
+- **프로토콜 + 구현체** 한 파일에 작성
+- **구현체 접두사**: `Default` (예: `DefaultMarkEditUseCase`)
+- **콜백 기반**: completion handler 패턴 (async-await 미사용)
+- **Stateful**: edit mode, selection 등 상태를 유지
+
+```swift
+protocol MarkEditUseCase {
+    var isEditMode: Bool { get }
+    func setEditMode(_ isEdit: Bool)
+    func save(name: String, description: String, completion: @escaping (AppError?) -> Void)
+
+    typealias EditModeChangedCompletion = () -> Void
+    func onEditModeChanged(_ completion: @escaping EditModeChangedCompletion)
+}
+```
+
+### UseCase 그룹별 분류
+
+| 그룹 | 위치 | 수량 |
+|------|------|------|
+| Login | `UseCase/Login/` | 3 |
+| Main | `UseCase/Main/` | 50+ |
+| OfflineTile | `UseCase/OfflineTile/` | 6 |
+| Splash | `UseCase/Splash/` | 10 |
+| Tile | `UseCase/Tile/` | 2 |
+
+### UseCase 작성 원칙
+
+1. **모든 비즈니스 작업은 UseCase를 통해 수행** — ViewModel은 Repository에 직접 접근하지 않음
+2. **UseCase는 다른 UseCase를 주입받지 않음** — 공통 로직은 Repository 레벨에서 해결
+3. **하나의 UseCase는 하나의 책임** — 단일 책임 원칙(SRP)
+
+### Repository 패턴
+
+- **Protocol**: `Domain/Interface/` (접두사 없음, 예: `MarkRepository`)
+- **구현체**: `Data/Repository/` (`Default` 접두사, 예: `DefaultMarkRepository`)
+- **프로토콜 채택**: extension으로 분리 (NOT class 선언부)
+- **Thread safety**: `DispatchQueue`로 동기화
+- **Facade 역할**: Storage + AppService를 조율
+
+```swift
+// Domain/Interface/MarkRepository.swift
+protocol MarkRepository {
+    var marks: [Mark] { get }
+    func sync(_ completion: @escaping () -> Void)
+    func fetchPage(sort: SortType, limit: Int, cursor: MarkPageCursor?,
+                   completion: @escaping (Result<[Mark], AppError>) -> Void)
+}
+
+// Data/Repository/DefaultMarkRepository.swift
+final class DefaultMarkRepository {
+    private let markStorage: MarkStorage
+    private let appService: AppService
+    private let workQueue = DispatchQueue(label: "DefaultMarkRepository")
+}
+
+extension DefaultMarkRepository: MarkRepository { ... }
+```
+
+### Presentation 패턴
+
+- **Actions struct**: ViewModel → Coordinator 네비게이션 액션
+- **Input**: `PublishRelay<T>` — UI 이벤트 (탭, 라이프사이클)
+- **Output**: `BehaviorRelay<T>` — UI 상태 (텍스트, 활성화 여부)
+- **Transform**: Input → Output 변환 메서드
+
+```swift
+struct MarkEditInfoViewModelActions {
+    let showAppMessage: (AppMessage) -> Void
+    let actionBottomView: (BottomViewAction) -> Void
+}
+
+protocol MarkEditInfoViewModel {
+    func transform(input: MarkEditInfoViewModelInput, disposeBag: DisposeBag)
+        -> MarkEditInfoViewModelOutput
+}
+```
+
+### MARK 섹션 표준
+
+```swift
+// MARK: - Property
+// MARK: - Life Cycle
+// MARK: - Interface
+// MARK: - Private
+// MARK: - UI              // View 전용
+// MARK: - Input / Output  // ViewModel 전용
+// MARK: - Transform       // ViewModel 전용
+```
+
+---
+
+## 적용 범위
+
+- **대상 프로젝트**: Navi 3.0 iOS (`iOS_Navigation`)
+- **선행 학습**: [[iOS_Architecture_v3|아키텍처 가이드]] 필수
+
+---
+
+## 관련 문서
+
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|iOS 아키텍처 가이드 (3.0)]]
+- [[iOS_RxHub_v3|iOS RxSwift 허브 (3.0)]]
+- [[iOS_CoordinatorHub_v3|iOS Coordinator 허브 (3.0)]]
+- [[iOS_SwiftStyle_v3|iOS Swift 스타일 가이드 (3.0)]]

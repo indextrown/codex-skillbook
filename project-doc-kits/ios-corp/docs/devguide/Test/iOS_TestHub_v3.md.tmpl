@@ -1,0 +1,116 @@
+# iOS 테스트 허브 (3.0)
+
+> [!abstract]
+> XCTest 기반 테스트 체계 진입점. 테스트 전략, Mock/Stub/Spy 패턴을 다룬다.
+
+---
+
+## 읽기 순서
+
+| 순서 | 문서 | 역할 |
+|------|------|------|
+| 1 | 이 문서 | 진입 허브 — 패턴 요약 |
+| 2 | [[iOS_Test_Strategy_v3\|테스트 전략 및 경계]] | 레이어별 테스트 전략, 우선순위 |
+| 3 | [[iOS_Test_MockPattern_v3\|Mock/Stub/Spy 패턴]] | 테스트 더블 구현 패턴 |
+
+---
+
+## Quick Reference
+
+### 테스트 타겟 구조
+
+- **테스트 타겟명**: `appTests`
+- **소스 미러링**: `appTests/` 하위가 `app/` 폴더 구조를 미러링
+
+```
+appTests/
+├── Data/
+├── Domain/
+├── Infrastructure/
+│   ├── Storage/
+│   │   ├── OfflineTile/
+│   │   └── Tile/
+│   ├── Manager/
+│   ├── Service/
+│   │   └── OfflineTile/
+│   │       └── Crypto/
+│   └── Parser/
+└── Presentation/
+```
+
+### 테스트 유형
+
+| 유형 | 레이어 | 예시 |
+|------|--------|------|
+| 단위 테스트 | Infrastructure | `TileDbCacheTests`, `FileProtectionManagerTests` |
+| 통합 테스트 | Data | Repository + Storage 연동 |
+| 도메인 테스트 | Domain | UseCase 비즈니스 로직 |
+| Crypto 테스트 | Infrastructure | `TileCryptoTests` |
+
+### 테스트 파일 예시
+
+| 파일 | 위치 | 테스트 대상 |
+|------|------|-----------|
+| `OfflineTileVersionStorageTests` | `Infrastructure/Storage/OfflineTile/` | 오프라인 타일 버전 관리 |
+| `TileDbCacheTests` | `Infrastructure/Storage/Tile/` | 타일 DB 캐시 |
+| `FileProtectionManagerTests` | `Infrastructure/Manager/` | 파일 보호 매니저 |
+| `AppLifecycleManagerTests` | `Infrastructure/Manager/` | 앱 라이프사이클 |
+| `TileCryptoTests` | `Infrastructure/Service/OfflineTile/Crypto/` | 타일 암호화 |
+
+### Mock 패턴
+
+Protocol 기반 DI를 활용한 Mock 주입:
+
+```swift
+// 1. Protocol 정의 (Domain/Interface/)
+protocol MarkRepository {
+    func fetchMarks(completion: @escaping (AppError?) -> Void)
+}
+
+// 2. Mock 구현 (appTests/)
+final class MockMarkRepository: MarkRepository {
+    var fetchMarksCallCount = 0
+    var fetchMarksResult: AppError?
+
+    func fetchMarks(completion: @escaping (AppError?) -> Void) {
+        self.fetchMarksCallCount += 1
+        completion(self.fetchMarksResult)
+    }
+}
+
+// 3. 테스트에서 Mock 주입
+func testMarkEditUseCase() {
+    let mockRepo = MockMarkRepository()
+    let useCase = DefaultMarkEditUseCase(markRepository: mockRepo)
+
+    useCase.save(name: "Test", description: "") { error in
+        XCTAssertNil(error)
+    }
+
+    XCTAssertEqual(mockRepo.fetchMarksCallCount, 1)
+}
+```
+
+### 테스트 파일 수
+
+| 카테고리 | 수량 |
+|---------|------|
+| 단위 테스트 (`appTests`) | 85 |
+| UI 테스트 (`appUITests`) | 2 |
+| **합계** | **87** |
+
+---
+
+## 적용 범위
+
+- **대상 프로젝트**: Navi 3.0 iOS (`iOS_Navigation`)
+- **테스트 프레임워크**: XCTest
+- **선행 학습**: [[iOS_Architecture_v3|아키텍처 가이드]] — 계층 구조 이해 필수
+
+---
+
+## 관련 문서
+
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|iOS 아키텍처 가이드 (3.0)]]
+- [[iOS_TemplateHub_v3|iOS 코드 템플릿 허브 (3.0)]]

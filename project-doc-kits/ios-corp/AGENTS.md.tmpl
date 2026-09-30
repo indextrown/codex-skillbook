@@ -1,0 +1,36 @@
+# {{PROJECT_NAME}} 작업 안내
+
+> 문서 키트가 만든 안내예요. `docs/devguide/`의 개발 가이드를 작업 기준으로 따라요.
+
+## 작업 전에 확인할 문서
+
+가이드 허브인 [개발 가이드 허브](docs/devguide/_DevGuide_Index_v3.md)부터 읽어요. 문서 사이의 `[[문서 이름]]` 링크는 `docs/devguide/` 아래에서 같은 이름의 `.md` 파일을 찾아 읽어요.
+
+| 확인할 내용 | 문서 |
+| --- | --- |
+| 프로젝트 실행과 기본 설정 | `README.md` (파일이 있으면 작업 전에 확인해요.) |
+| 가이드 읽기 순서와 빠른 참조 | [개발 가이드 허브](docs/devguide/_DevGuide_Index_v3.md) |
+| 계층 구조와 의존성 방향 | [아키텍처 가이드](docs/devguide/iOS_Architecture_v3.md) |
+| 폴더 구조와 파일 배치 | [폴더 구조 가이드](docs/devguide/iOS_FolderStructure_v3.md) |
+| Spec과 코드 매핑 | [코드 매핑 가이드](docs/devguide/iOS_CodeMap_v3.md) |
+| 계층별 코드 템플릿 | [코드 템플릿 허브](docs/devguide/Template/iOS_TemplateHub_v3.md) · [Presentation](docs/devguide/Template/iOS_Template_Presentation_v3.md) · [UseCase](docs/devguide/Template/iOS_Template_UseCase_v3.md) · [Repository](docs/devguide/Template/iOS_Template_Repository_v3.md) |
+| RxSwift·RxCocoa 바인딩 | [RxSwift 허브](docs/devguide/Rx/iOS_RxHub_v3.md) · [바인딩 정책](docs/devguide/Rx/iOS_Rx_BindingPolicy_v3.md) · [Input/Output 패턴](docs/devguide/Rx/iOS_Rx_InputOutput_v3.md) |
+| Coordinator와 DI Container | [Coordinator 허브](docs/devguide/Coordinator/iOS_CoordinatorHub_v3.md) · [Flow](docs/devguide/Coordinator/iOS_Coordinator_Flow_v3.md) · [Actions](docs/devguide/Coordinator/iOS_Coordinator_Action_v3.md) · [DI Container](docs/devguide/Coordinator/iOS_Coordinator_DI_v3.md) |
+| 테스트 전략과 테스트 더블 | [테스트 허브](docs/devguide/Test/iOS_TestHub_v3.md) · [테스트 전략](docs/devguide/Test/iOS_Test_Strategy_v3.md) · [테스트 더블 패턴](docs/devguide/Test/iOS_Test_MockPattern_v3.md) |
+| Swift 코드 스타일 | [Swift 스타일 가이드](docs/devguide/iOS_SwiftStyle_v3.md) |
+| 브랜치 전략과 커밋 컨벤션 | [Git Flow 가이드](docs/devguide/iOS_GitFlow_v3.md) |
+
+## 작업 중 판단 기준
+
+| 상황 | 판단 기준 |
+| --- | --- |
+| 새 파일을 만들어요. | 폴더 구조 가이드와 코드 템플릿을 따라 위치와 뼈대를 정해요. |
+| 문서와 코드 또는 프로젝트 설정이 달라요. | 차이를 사용자에게 알리고, 어느 쪽을 따를지 확인한 뒤 작업해요. |
+| 가이드에 없는 결정을 해야 해요. | 단정하지 말고 `확인 필요`라고 표시해요. 확인할 파일이나 명령도 함께 적어요. |
+| 커밋 메시지나 브랜치를 만들어요. | Git Flow 가이드의 브랜치 규칙과 커밋 타입을 따라요. |
+
+## 작업 완료 전 확인
+
+- [ ] 변경한 코드가 아키텍처·폴더 구조·Swift 스타일 가이드를 따르는지 확인했어요.
+- [ ] 확인하지 못한 내용에는 `확인 필요`와 확인 대상을 남겼어요.
+- [ ] 프로젝트에 맞는 테스트를 실행하고 결과를 기록했어요.

@@ -1,0 +1,112 @@
+# iOS DI Container 패턴 (3.0)
+
+> [!abstract]
+> AppDIContainer의 의존성 관리 패턴. Factory method, lazy shared instance, MARK 카테고리 규칙을 다룬다.
+
+---
+
+## AppDIContainer 패턴
+
+AppDIContainer는 앱 전역의 의존성을 관리하는 중앙 컨테이너입니다.
+
+### 인스턴스 생성 패턴
+
+| 패턴 | 사용 시점 | 특징 |
+|------|----------|------|
+| `private func make...()` | 매번 새 인스턴스 필요 | Stateless, 상태 공유 불필요 |
+| `private lazy var` | 단일 인스턴스 공유 | Stateful, 여러 컴포넌트에서 동일 상태 참조 |
+
+```swift
+// make 함수 - 매번 새 인스턴스 생성
+// UserStorage
+private func makeUserStorage() -> UserStorage {
+    return DefaultUserStorage()
+}
+
+// lazy var - 단일 인스턴스 공유
+// Repository1
+// Repository2
+private lazy var appService: AppService = {
+    return AppService(userStorage: self.makeUserStorage())
+}()
+```
+
+### 사용처 주석 규칙
+
+모든 프로퍼티와 메서드 위에 사용하는 컴포넌트를 주석으로 명시합니다:
+
+```swift
+// SplashViewModel
+// MainViewModel
+private func makeCheckNetworkUseCase() -> CheckNetworkUseCase {
+    return DefaultCheckNetworkUseCase(self.networkMonitorRepository)
+}
+
+// MainViewModel
+// MyVesselViewModel
+// MyFleetViewModel
+// SettingViewModel
+private lazy var myFleetUseCase: MyFleetUseCase = {
+    return DefaultMyFleetUseCase(...)
+}()
+```
+
+**목적**:
+- 의존성 추적 용이
+- 미사용 코드 식별 (`// (unused)` 표시 또는 주석 없음)
+- 코드 삭제/수정 시 영향 범위 파악
+
+### MARK 카테고리 구분
+
+**배치 순서**: 의존성 흐름에 따라 (Infrastructure → Domain → Presentation)
+
+```swift
+final class AppDIContainer {
+
+    // MARK: - Storage
+    ...
+
+    // MARK: - Service
+    ...
+
+    // MARK: - Manager
+    ...
+
+    // MARK: - Repository
+    ...
+
+    // MARK: - UseCase
+    ...
+
+    // MARK: - ViewModel
+
+    func makeSplashViewModel(_ actions: SplashViewActions) -> SplashViewModel { ... }
+    func makeMainViewModel(_ actions: MainViewModelActions) -> MainViewModel { ... }
+}
+```
+
+### ViewModel Factory 메서드
+
+ViewModel Factory 메서드는 **public 함수**로 선언하며, AppFlowCoordinator에서 호출합니다:
+
+```swift
+// MARK: - ViewModel
+
+func makeSplashViewModel(_ actions: SplashViewActions) -> SplashViewModel {
+    return DefaultSplashViewModel(
+        actions: actions,
+        startNetworkMonitoringUseCase: self.makeStartNetworkMonitoringUseCase(),
+        checkNetworkUseCase: self.makeCheckNetworkUseCase(),
+        ...
+    )
+}
+```
+
+---
+
+## 관련 문서
+
+- [[iOS_Coordinator_Flow_v3|Coordinator Flow 가이드 (3.0)]]
+- [[iOS_Coordinator_Action_v3|ViewModel Actions 패턴 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|전체 아키텍처 개요]]

@@ -1,0 +1,247 @@
+# iOS 아키텍처 가이드 (3.0)
+
+> [!abstract]
+> Clean Architecture + MVVM + RxSwift 기반 iOS 3.0 프로젝트 아키텍처 가이드.
+
+## 목차
+- [아키텍처 개요](#아키텍처-개요)
+- [레이어별 구조](#레이어별-구조)
+- [의존성 방향과 데이터 흐름](#의존성-방향과-데이터-흐름)
+- [주요 패턴 요약](#주요-패턴-요약)
+- [새 기능 개발 체크리스트](#새-기능-개발-체크리스트)
+
+---
+
+## 아키텍처 개요
+
+코드베이스는 Clean Architecture 원칙을 따르며 관심사를 명확히 분리합니다.
+
+### 레이어 구성
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                         │
+│  (AppDelegate, SceneDelegate, AppDIContainer, Coordinator)  │
+└─────────────────────────────────────────────────────────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│  Presentation   │  │     Domain      │  │      Data       │
+│  (View, VC, VM) │  │ (Entity, UC)    │  │  (Repository)   │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+          │                    ▲                    │
+          └────────────────────┘                    │
+                                                    ▼
+                                         ┌─────────────────┐
+                                         │ Infrastructure  │
+                                         │(Service,Manager)│
+                                         └─────────────────┘
+```
+
+### 주요 외부 의존성
+
+- **RxSwift/RxCocoa**: 반응형 바인딩
+- **GRDB**: 로컬 데이터베이스
+- **SnapKit**: UI 레이아웃 선언
+- **Then**: UI 구성 간소화
+
+---
+
+## 레이어별 구조
+
+### Application Layer (`app/Application/`)
+
+- `AppDIContainer.swift`: 모든 서비스, 리포지토리, 유즈케이스 인스턴스를 관리하는 중앙 의존성 주입 컨테이너
+- `AppFlowCoordinator.swift`: 뷰 컨트롤러 플로우와 바텀시트 프레젠테이션을 관리하는 네비게이션 코디네이터
+- 진입점: `AppDelegate.swift`, `SceneDelegate.swift`
+
+### Domain Layer (`app/Domain/`)
+
+- `Entity/`: 비즈니스 모델
+- `Interface/`: 데이터 액세스 계약을 정의하는 리포지토리 프로토콜
+- `UseCase/`: 기능별로 구성된 비즈니스 로직 구현
+
+#### Repository Protocol
+
+**위치**: `Domain/Interface/`
+
+> 코드 템플릿은 [[iOS_Template_Repository_v3|Repository 템플릿 (3.0)]] 참조
+
+#### UseCase 구조
+
+**위치**: `Domain/UseCase/[Feature]/`
+- **프로토콜과 구현체를 한 파일에 작성**
+
+> 코드 템플릿은 [[iOS_Template_UseCase_v3|UseCase 템플릿 (3.0)]] 참조
+
+**UseCase 작성 원칙**:
+
+1. **모든 비즈니스 작업은 UseCase를 통해 수행**
+   - Presentation Layer(ViewModel)는 Repository나 Manager에 직접 접근하지 않음
+
+2. **UseCase는 다른 UseCase를 주입받지 않음**
+   - 공통 로직은 Repository 레벨에서 해결
+   - ViewModel에서 여러 UseCase를 조합하여 사용
+
+3. **하나의 UseCase는 하나의 책임**
+   - 단일 책임 원칙(SRP)에 따라 기능별로 분리
+
+### Data Layer (`app/Data/`)
+
+- `Repository/`: Domain의 Repository Protocol 구현체
+- `DTO/`: 서버 통신용 Data Transfer Object
+- `Model/`: 로컬 데이터 구조
+
+**위치**: `Data/Repository/`
+
+> 코드 템플릿은 [[iOS_Template_Repository_v3|Repository 템플릿 (3.0)]] 참조
+
+### Infrastructure Layer (`app/Infrastructure/`)
+
+- `Service/`: 외부 네트워크 API 통신 (NetworkService, AuthService 등)
+- `Manager/`: 내부 시스템 접근 (PermissionManager, CaptureManager 등)
+- `Storage/`: 로컬 데이터베이스 및 영속성 관리
+- `Utils/`: 인프라 유틸리티
+
+### Presentation Layer (`app/Presentation/`)
+
+- `Splash/`, `Signin/`, `Main/`, `Bottom/`: Scene별 화면 구성
+- `Common/`: 공통 UI 컴포넌트 및 프로토콜
+- `Utils/`: Presentation 전용 유틸리티
+
+**구성 규칙**:
+- **Scene**: 앱의 주요 흐름 단위 (Splash, Signin, Main, Bottom)
+- **Feature**: Scene 내의 화면 단위 (Bottom/Mark, Bottom/RoutePlan 등)
+- **ViewModel 폴더**: `Presentation/[Scene]/[Feature]/ViewModel/`
+- **View 폴더**: `Presentation/[Scene]/[Feature]/View/`
+
+---
+
+## 의존성 방향과 데이터 흐름
+
+### 의존성 방향 (Dependency Rule)
+
+Clean Architecture의 핵심은 **의존성이 항상 안쪽 방향(Domain)으로만 향한다**는 것입니다.
+
+```mermaid
+flowchart LR
+    Application --> Presentation
+    Application --> Domain
+    Application --> Data
+    Presentation --> Domain
+    Data --> Domain
+    Data --> Infrastructure
+```
+
+### 각 레이어의 책임
+
+| 레이어 | 의존 대상 | 특징 |
+|--------|----------|------|
+| **Domain** | 없음 | 다른 레이어에 의존하지 않음 |
+| **Presentation** | Domain | UseCase를 통해 비즈니스 로직 호출 |
+| **Data** | Domain, Infrastructure | Protocol 구현, 데이터 변환 |
+| **Infrastructure** | 없음 | 외부 프레임워크 의존 |
+| **Application** | 전체 | 의존성 조립 및 주입 |
+
+### 데이터 흐름
+
+#### 1. 사용자 액션 → 비즈니스 로직
+
+```
+View → ViewController → ViewModel (Input) → UseCase → Repository → Infrastructure
+```
+
+#### 2. 데이터 변경 → UI 업데이트
+
+```
+Infrastructure → Repository → UseCase → ViewModel (Output) → ViewController → View
+```
+
+### 핵심 원칙
+
+1. **의존성 역전 (Dependency Inversion)**
+   - Domain이 Repository Protocol을 정의
+   - Data가 Repository 구현체를 제공
+
+2. **Domain의 독립성**
+   - 비즈니스 로직은 UI, DB, 프레임워크에 독립적
+
+3. **단방향 의존성**
+   - 외부에서 내부로만 의존
+   - 순환 참조 방지
+
+---
+
+## 주요 패턴 요약
+
+### 1. MVVM + Clean Architecture
+
+| 구성요소 | 책임 |
+|----------|------|
+| **View** | UI 렌더링만 담당 |
+| **ViewController** | View와 ViewModel 바인딩 |
+| **ViewModel** | Presentation 로직, UseCase 호출 |
+| **UseCase** | 비즈니스 로직 실행 |
+| **Repository** | 데이터 소스 추상화 |
+
+### 2. 의존성 주입 (Dependency Injection)
+
+- `AppDIContainer`가 모든 의존성 관리
+- 생성자 주입 방식 사용
+- Protocol 기반 느슨한 결합
+
+### 3. Input/Output 패턴
+
+- Input: View에서 ViewModel로 이벤트 전달
+- Output: ViewModel에서 View로 데이터 전달
+- Transform 함수에서 비즈니스 로직 처리
+
+### 4. Repository 패턴
+
+- Domain에서 Protocol 정의 (인터페이스)
+- Data에서 구현체 작성 (실제 구현)
+- Infrastructure의 Service/Manager/Storage 활용
+
+---
+
+## 새 기능 개발 체크리스트
+
+### 1단계: Domain Layer
+
+- [ ] `Domain/Entity/`에 엔티티 정의
+- [ ] `Domain/Interface/`에 리포지토리 **프로토콜** 생성
+- [ ] `Domain/UseCase/[Feature]/`에 유즈케이스 **프로토콜과 구현체를 한 파일**에 생성
+
+### 2단계: Data Layer
+
+- [ ] 필요시 `Data/DTO/`에 데이터 전송 객체 추가
+- [ ] `Data/Repository/`에 리포지토리 **구현체** 생성
+- [ ] Service 또는 Storage와 연동
+- [ ] DTO ↔ Entity 변환 로직 구현
+
+### 3단계: Presentation Layer
+
+- [ ] 커스텀 View 생성
+- [ ] ViewModel 생성
+  - [ ] Actions struct 정의
+  - [ ] Input/Output Protocol 정의
+  - [ ] Transform 함수 구현
+- [ ] ViewController 생성
+  - [ ] RxSwift 바인딩 구현
+
+### 4단계: Application Layer
+
+- [ ] AppDIContainer에 Repository 생성 메서드 추가
+- [ ] AppDIContainer에 UseCase 생성 메서드 추가
+- [ ] AppDIContainer에 ViewModel 생성 메서드 추가
+- [ ] AppFlowCoordinator에 네비게이션 메서드 추가
+
+---
+
+## 관련 문서
+
+- [[_DevGuide_Index_v3|개발 가이드 허브 (3.0)]]
+- [[iOS_FolderStructure_v3|iOS 폴더 구조 가이드 (3.0)]]
+- [[iOS_CoordinatorHub_v3|iOS Coordinator 허브 (3.0)]]
+- [[iOS_TemplateHub_v3|iOS 코드 템플릿 허브 (3.0)]]
+- [[iOS_RxHub_v3|iOS RxSwift 허브 (3.0)]]

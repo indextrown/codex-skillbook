@@ -1,0 +1,83 @@
+# iOS 테스트 더블 패턴 (3.0)
+
+> [!abstract]
+> Mock, Stub, Spy, Fake 등 테스트 더블의 유형별 구현 패턴과 사용 예시를 다룬다.
+
+---
+
+## 테스트 더블 패턴
+
+### 유형 정리
+
+| 유형 | 역할 | 사용 시기 |
+|------|------|----------|
+| **Stub** | 미리 정의된 응답 반환 | 특정 값 반환 필요 |
+| **Spy** | 호출 여부/횟수 기록 | 메서드 호출 검증 |
+| **Mock** | 예상 호출 검증 | 엄격한 호출 검증 |
+| **Fake** | 실제 구현의 경량 버전 | 인메모리 DB |
+
+### 비동기 콜백 제어형
+
+```swift
+final class MockFetchUseCase: FetchUseCaseProtocol {
+    var executeCallCount = 0
+    var onExecute: (() -> Void)?
+    private var completion: ((AppError?) -> Void)?
+
+    func execute(completion: @escaping (AppError?) -> Void) {
+        self.executeCallCount += 1
+        self.completion = completion
+        self.onExecute?()
+    }
+
+    func complete(with error: AppError? = nil) {
+        self.completion?(error)
+    }
+}
+```
+
+### 즉시 반환형 (Stub)
+
+```swift
+final class MockCheckUseCase: CheckUseCaseProtocol {
+    var result: ResultType = .default
+    var executeCallCount = 0
+
+    func execute(completion: @escaping (ResultType) -> Void) {
+        self.executeCallCount += 1
+        completion(self.result)
+    }
+}
+```
+
+### Actions Mock
+
+```swift
+final class MockViewActions {
+    var presentLoginCount = 0
+    var pushMainCount = 0
+    var onPresentLogin: (() -> Void)?
+    var onPushMain: (() -> Void)?
+
+    var actions: ViewActions {
+        ViewActions(
+            presentLogin: { [weak self] in
+                self?.presentLoginCount += 1
+                self?.onPresentLogin?()
+            },
+            pushMain: { [weak self] in
+                self?.pushMainCount += 1
+                self?.onPushMain?()
+            }
+        )
+    }
+}
+```
+
+---
+
+## 관련 문서
+
+- [[iOS_Test_Strategy_v3|테스트 전략 가이드 (3.0)]]
+- [[_DevGuide_Index_v3|개발 가이드 인덱스 (3.0)]]
+- [[iOS_Architecture_v3|프로젝트 아키텍처]]
