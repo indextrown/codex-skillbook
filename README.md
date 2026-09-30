@@ -84,6 +84,21 @@ npx skills remove global-humanize-korean --agent codex --global --yes
 
 Node.js 22 이상과 npm 10 이상이 필요해요. 명령은 별도 버전을 지정하지 않고 이 저장소의 기본 브랜치에 병합된 최신 키트를 사용해요.
 
+### 키트 고르기
+
+| 키트 | 만드는 문서 | git hook |
+| --- | --- | --- |
+| `ios-uikit` | `AGENTS.md`, `CLAUDE.md`와 `docs/architecture/`·`docs/development/`의 검토용 초안 15개 | 제공 |
+| `ios-corp` | `AGENTS.md`, `CLAUDE.md`와 `docs/devguide/`의 iOS 개발 가이드 20개(아키텍처·폴더 구조·코드 템플릿·RxSwift·Coordinator·테스트·Swift 스타일·Git Flow) | 제공하지 않음 |
+
+한 프로젝트에는 키트 하나만 적용해요. `.project-docs/manifest.json`에 적용한 키트를 기록하고, 다른 키트로 `init`·`hooks`·`contribute`를 실행하면 파일을 바꾸지 않고 오류로 멈춰요. 아래 예시는 `ios-uikit` 기준이에요. 다른 키트는 명령의 `ios-uikit` 자리에 키트 이름을 넣어요.
+
+```bash
+npx --yes --package=github:indextrown/codex-skillbook -- project-docs init ios-corp
+```
+
+`ios-corp`의 `docs/devguide/` 문서는 문서 맨 위의 frontmatter(작성자·태그 등 메타데이터)만 빼고 원문을 그대로 옮겼어요. 문서 사이의 `[[문서 이름]]` 링크는 Obsidian 형식이라, `AGENTS.md`에서 같은 이름의 `.md` 파일을 찾아 읽도록 안내해요.
+
 ### 빠르게 시작하기
 
 UIKit 프로젝트 루트에서 다음 명령을 실행해요.
