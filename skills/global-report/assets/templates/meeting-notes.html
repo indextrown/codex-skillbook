@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>{{회의 이름}} 회의 결과</title>
+</head>
+<body>
+<section class="cover compact">
+  <h1>{{회의 이름}} 회의 결과</h1>
+  <p>{{회의 날짜}} · 작성 {{작성자}}</p>
+</section>
+
+<section>
+  <h2>1. 회의 개요</h2>
+  <figure>
+    <table>
+      <tbody>
+        <tr><th>일시</th><td>{{일시}}</td></tr>
+        <tr><th>장소</th><td>{{장소}}</td></tr>
+        <tr><th>참석자</th><td>{{참석자}}</td></tr>
+        <tr><th>안건</th><td>{{안건}}</td></tr>
+      </tbody>
+    </table>
+  </figure>
+</section>
+
+<section>
+  <h2>2. 논의 내용</h2>
+  <h3>{{안건 1}}</h3>
+  <p>{{나온 의견 요약}}</p>
+</section>
+
+<section>
+  <h2>3. 결정 사항</h2>
+  <ol>
+    <li>{{결정한 내용}}</li>
+  </ol>
+</section>
+
+<section>
+  <h2>4. 후속 작업</h2>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>할 일</th><th>담당</th><th>기한</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>{{할 일}}</td><td>{{담당}}</td><td>{{기한}}</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 1. 후속 작업</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>5. 미결 사항</h2>
+  <ul>
+    <li>{{다음 회의로 넘긴 안건}}</li>
+  </ul>
+</section>
+</body>
+</html>

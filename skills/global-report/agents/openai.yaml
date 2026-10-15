@@ -1,0 +1,4 @@
+interface:
+  display_name: "Global Report"
+  short_description: "여러 번 쌓은 보고서 내용을 PDF·DOCX·Pages로 내보내기"
+  default_prompt: "Use $global-report to collect report material across calls and export the report to PDF, DOCX, or Pages."

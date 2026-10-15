@@ -1,0 +1,13 @@
+{
+  "name": "global-report-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "global-report 스킬의 DOCX 내보내기 의존성",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "docx": "9.11.0"
+  }
+}
