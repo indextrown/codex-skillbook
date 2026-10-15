@@ -161,6 +161,31 @@ export function resolveInside(reportDir, relative) {
 }
 
 /**
+ * Codex 같은 에이전트 샌드박스 안에서 실행 중이면 샌드박스 이름(예: seatbelt)을 돌려줘요.
+ * macOS seatbelt 샌드박스 안에서는 Chrome·Pages·LibreOffice 같은 앱을 실행할 수 없어요.
+ */
+export function agentSandbox() {
+  return process.env.CODEX_SANDBOX || null;
+}
+
+/** 앱 실행이 샌드박스에 막혔을 때 쓰는 오류예요. 스크립트는 종료 코드 3으로 끝나요. */
+export function sandboxError(subject) {
+  const error = new Error(
+    `${subject} Codex 샌드박스(${agentSandbox()}) 안에서 실행할 수 없어요. macOS가 샌드박스 안에서 앱 실행을 막아요. `
+    + '같은 명령을 샌드박스 밖에서 실행하도록 사용자에게 권한 승인을 요청한 뒤 다시 실행해 주세요.',
+  );
+  error.code = 'SANDBOX';
+  return error;
+}
+
+/** 오류 종류에 맞는 종료 코드예요. 검사 실패 1, 샌드박스 3, 그 밖의 오류 2. */
+export function exitCodeFor(error) {
+  if (error.code === 'LINT') return 1;
+  if (error.code === 'SANDBOX') return 3;
+  return 2;
+}
+
+/**
  * 스크립트가 직접 실행됐는지 확인해요. 심볼릭 링크로 설치된 스킬이나 macOS의 /var → /private/var처럼
  * 경로 문자열이 달라도 같은 파일이면 참이에요.
  */

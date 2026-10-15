@@ -4,12 +4,13 @@
 // - PDF: pdftoppm으로 바로 바꿔요.
 // - DOCX·Pages: Pages로 PDF를 뽑아 바꿔요. Pages가 없을 때만 LibreOffice를 쓰고,
 //   LibreOffice는 Pretendard를 찾지 못해 글꼴·굵게가 다르게 보일 수 있다고 알려요.
+//   Codex 샌드박스 안에서는 두 앱 모두 실행되지 않아 종료 코드 3으로 끝나요. PDF는 샌드박스 안에서도 돼요.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { isMain, parseArgs, which } from './lib/report.mjs';
+import { agentSandbox, exitCodeFor, isMain, parseArgs, sandboxError, which } from './lib/report.mjs';
 
 const SCRIPTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const LIBREOFFICE_APP = '/Applications/LibreOffice.app/Contents/MacOS/soffice';
@@ -61,6 +62,7 @@ export function renderPreview(file, { outDir, dpi = 80 } = {}) {
   let renderer = 'pdf';
   const notes = [];
   if (extension === '.docx' || extension === '.pages') {
+    if (agentSandbox() === 'seatbelt') throw sandboxError('DOCX·Pages를 렌더하는 Pages와 LibreOffice는');
     pdf = path.join(target, 'rendered.pdf');
     const viaPages = pagesToPdf(input, pdf);
     if (viaPages.ok) {
@@ -112,6 +114,6 @@ if (isMain(import.meta.url)) {
     process.exitCode = main();
   } catch (error) {
     console.error(error.message);
-    process.exitCode = 2;
+    process.exitCode = exitCodeFor(error);
   }
 }

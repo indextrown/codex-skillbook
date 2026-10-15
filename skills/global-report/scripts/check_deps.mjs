@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { SCRIPTS_DIR, findChrome, isMain, parseArgs, which } from './lib/report.mjs';
+import { SCRIPTS_DIR, agentSandbox, findChrome, isMain, parseArgs, which } from './lib/report.mjs';
 
 const isMac = process.platform === 'darwin';
 const POPPLER_HINT = isMac ? 'brew install poppler' : 'sudo apt-get install poppler-utils';
@@ -41,10 +41,14 @@ function installDocx() {
     timeout: 300_000,
   });
   if (result.status === 0 && docxInstalled()) return { ok: true, message: 'npm ci로 docx를 설치했어요.' };
-  return { ok: false, message: `npm ci가 실패했어요. 네트워크를 확인해 주세요.\n${(result.stderr ?? '').trim()}` };
+  const reason = agentSandbox()
+    ? 'Codex 샌드박스가 네트워크와 스킬 폴더 쓰기를 막아서 npm ci가 실패했어요. 이 명령을 샌드박스 밖에서 실행하도록 권한 승인을 요청해 주세요.'
+    : 'npm ci가 실패했어요. 네트워크를 확인해 주세요.';
+  return { ok: false, message: `${reason}\n${(result.stderr ?? '').trim()}` };
 }
 
 export function checkDependencies({ install = true } = {}) {
+  const sandbox = agentSandbox();
   const checks = [];
   const add = (name, level, found, detail, hint) => checks.push({ name, level, ok: Boolean(found), detail: found || detail, hint: found ? '' : hint });
 
@@ -64,13 +68,19 @@ export function checkDependencies({ install = true } = {}) {
   }
   add('docx 라이브러리 (DOCX 출력)', 'required', docxDetail, '없음', docxHint);
 
-  add('Pages (.pages 출력, DOCX 확인)', 'optional', findPages(), isMac ? '없음' : 'macOS가 아니에요', 'App Store에서 Pages를 설치하면 .pages 출력을 쓸 수 있어요.');
-  add('LibreOffice (Pages가 없을 때 DOCX 확인)', 'optional', findLibreOffice(), '없음', isMac ? 'brew install --cask libreoffice' : 'sudo apt-get install libreoffice');
+  // 샌드박스 안에서는 앱 위치 조회가 막혀서, 설치돼 있어도 찾지 못할 수 있어요.
+  const missingApp = sandbox ? '샌드박스 안이라 확인하지 못했어요' : '없음';
+  add('Pages (.pages 출력, DOCX 확인)', 'optional', findPages(), isMac ? missingApp : 'macOS가 아니에요', 'App Store에서 Pages를 설치하면 .pages 출력을 쓸 수 있어요.');
+  add('LibreOffice (Pages가 없을 때 DOCX 확인)', 'optional', findLibreOffice(), missingApp, isMac ? 'brew install --cask libreoffice' : 'sudo apt-get install libreoffice');
   add('pdftotext (PDF 자료 읽기)', 'optional', which('pdftotext'), '없음', POPPLER_HINT);
   if (isMac) add('textutil (DOCX 자료 읽기)', 'optional', which('textutil'), '없음', 'macOS 기본 도구예요.');
 
   const ok = checks.every((check) => check.ok || check.level === 'optional');
-  return { ok, checks };
+  const notes = sandbox
+    ? [`Codex 샌드박스(${sandbox}) 안에서 실행 중이에요. 검사, DOCX 생성, PDF 쪽 이미지 만들기는 샌드박스 안에서 돼요. `
+      + 'PDF 출력(Chrome), Pages 출력, DOCX 확인 렌더는 샌드박스 밖에서 실행하도록 권한 승인이 필요해요.']
+    : [];
+  return { ok, sandbox, notes, checks };
 }
 
 function main() {
@@ -84,6 +94,7 @@ function main() {
       console.log(`${mark} ${check.name}: ${check.detail}`);
       if (check.hint) console.log(`    ${check.hint.replace(/\n/g, '\n    ')}`);
     }
+    for (const note of result.notes) console.log(`확인 필요: ${note}`);
     console.log(result.ok ? '필수 도구가 모두 준비됐어요.' : '필수 도구가 빠져 있어요. 위 안내대로 설치한 뒤 다시 실행해 주세요.');
   }
   return result.ok ? 0 : 1;

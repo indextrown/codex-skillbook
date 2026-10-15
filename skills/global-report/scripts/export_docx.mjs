@@ -10,7 +10,7 @@ import { classList, elementChildren, findFirst, serializeHTML } from './lib/html
 import { formatLint, lintReport } from './lib/lint.mjs';
 import { coverKind } from './lib/print.mjs';
 import {
-  imageSize, isMain, loadReport, loadTheme, nextExportPath, parseArgs, resolveInside,
+  exitCodeFor, imageSize, isMain, loadReport, loadTheme, nextExportPath, parseArgs, resolveInside,
 } from './lib/report.mjs';
 
 const TWIPS_PER_MM = 1440 / 25.4;
@@ -306,6 +306,6 @@ if (isMain(import.meta.url)) {
     process.exitCode = await main();
   } catch (error) {
     console.error(error.message);
-    process.exitCode = error.code === 'LINT' ? 1 : 2;
+    process.exitCode = exitCodeFor(error);
   }
 }

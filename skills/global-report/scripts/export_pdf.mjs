@@ -2,6 +2,7 @@
 // 사용법: node export_pdf.mjs <보고서 폴더> [--out <파일.pdf>] [--json]
 // report.html을 검사한 뒤 Chrome으로 인쇄해 exports/<제목>_v<N>_<날짜>.pdf를 만들어요.
 // npm 의존성 없이 Node와 Chrome만으로 동작해요.
+// 종료 코드: 0 성공, 1 검사 실패, 2 그 밖의 오류, 3 Codex 샌드박스 안이라 Chrome을 실행할 수 없음
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,7 +11,8 @@ import { pathToFileURL } from 'node:url';
 import { formatLint, lintReport } from './lib/lint.mjs';
 import { buildPrintHtml } from './lib/print.mjs';
 import {
-  findChrome, isMain, loadReport, loadTheme, nextExportPath, parseArgs, pdfFonts, pdfPageCount,
+  agentSandbox, exitCodeFor, findChrome, isMain, loadReport, loadTheme, nextExportPath, parseArgs, pdfFonts, pdfPageCount,
+  sandboxError,
 } from './lib/report.mjs';
 
 export function exportPdf(reportDir, { out } = {}) {
@@ -22,6 +24,7 @@ export function exportPdf(reportDir, { out } = {}) {
     throw error;
   }
 
+  if (agentSandbox() === 'seatbelt') throw sandboxError('PDF를 만드는 Chrome은');
   const chrome = findChrome();
   if (!chrome) {
     const error = new Error('Chrome을 찾지 못했어요. Google Chrome을 설치하거나 CHROME_PATH 환경 변수로 위치를 알려 주세요.');
@@ -49,6 +52,7 @@ export function exportPdf(reportDir, { out } = {}) {
       pathToFileURL(printPath).href,
     ], { encoding: 'utf8', timeout: 120_000 });
     if (!fs.existsSync(target) || fs.statSync(target).size === 0) {
+      if (agentSandbox()) throw sandboxError('PDF를 만드는 Chrome은');
       throw new Error(`Chrome이 PDF를 만들지 못했어요.\n${(result.stderr ?? '').trim()}`);
     }
   } finally {
@@ -85,6 +89,6 @@ if (isMain(import.meta.url)) {
     process.exitCode = main();
   } catch (error) {
     console.error(error.message);
-    process.exitCode = error.code === 'LINT' ? 1 : 2;
+    process.exitCode = exitCodeFor(error);
   }
 }

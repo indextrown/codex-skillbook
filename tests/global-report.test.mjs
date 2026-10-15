@@ -128,6 +128,30 @@ test('심볼릭 링크로 설치한 스킬에서도 스크립트가 실행돼요
   assert.ok(Array.isArray(JSON.parse(result.stdout).checks), result.stderr);
 });
 
+test('Codex 샌드박스 안에서는 앱이 필요한 출력을 종료 코드 3으로 안내해요', (t) => {
+  const dir = sampleReport(t);
+  const env = { ...process.env, CODEX_SANDBOX: 'seatbelt' };
+  const pdf = runScript('export_pdf.mjs', [dir], { env });
+  assert.equal(pdf.status, 3, pdf.stderr);
+  assert.match(pdf.stderr, /샌드박스 밖에서 실행하도록/);
+  assert.equal(fs.existsSync(path.join(dir, 'exports')), false);
+
+  const docxPath = path.join(dir, 'sample.docx');
+  fs.writeFileSync(docxPath, 'not a real docx');
+  const preview = runScript('render_preview.mjs', [docxPath], { env });
+  assert.equal(preview.status, 3, preview.stderr);
+
+  const deps = JSON.parse(runScript('check_deps.mjs', ['--no-install', '--json'], { env }).stdout);
+  assert.equal(deps.sandbox, 'seatbelt');
+  assert.equal(deps.notes.length, 1);
+
+  if (process.platform === 'darwin') {
+    const pages = spawnSync('osascript', ['-l', 'JavaScript', path.join(SCRIPTS, 'export_pages.js'), docxPath], { encoding: 'utf8', env });
+    assert.equal(pages.status, 3, pages.stdout + pages.stderr);
+    assert.match(pages.stdout + pages.stderr, /Codex 샌드박스/);
+  }
+});
+
 test('자리 표시자가 남으면 내보내지 않아요', (t) => {
   const dir = sampleReport(t);
   rewrite(dir, (html) => html.replace('관련 저장소', '{{관련 저장소}}'));
