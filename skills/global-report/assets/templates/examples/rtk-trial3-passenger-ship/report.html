@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>3차 RTK 실증 결과 보고 (여객선)</title>
+</head>
+<body>
+<section class="cover compact">
+  <h1>3차 RTK 실증 결과 보고 (여객선)</h1>
+  <p>2026년 10월 15일 · 인천–덕적 여객선 KOREA PEACE · 작성 김동현</p>
+</section>
+
+<aside class="callout" data-sources="S2 S10">
+  <p><strong>요약</strong> RTK 장비 4대 중 Mapsea ① (듀얼 안테나)은 접안 직전 Fix에 도달했지만 AD Navi는 끝까지 Float였음. 보정·위성·기준국 거리는 정상이어서, 포드를 난간 기둥에 묶어 설치한 수신 환경이 가장 유력한 원인임.</p>
+</aside>
+
+<section data-sources="S2 S6 S8">
+  <h2>1. 실증 개요</h2>
+  <table>
+    <tbody>
+      <tr><th>일시·선박</th><td>2026-10-15(목) 인천–덕적 여객선 KOREA PEACE. 인천 08:00 출항, 덕적도 09:31 출항 후 인천 10:47 접안</td></tr>
+      <tr><th>장비</th><td>RTK 4대: Mapsea RTK ①(듀얼 안테나), Mapsea RTK ②(PPP 모드), AD Navi XR2, LG RTK</td></tr>
+      <tr><th>보정</th><td>Mapsea ①·AD Navi는 해수부 NTRIP, LG는 앱 NTRIP 중계, Mapsea ②는 보정 없이 PPP</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section data-sources="S2 S3 S4">
+  <h2>2. 장비별 결과</h2>
+  <h3>2.1 인천 → 덕적도</h3>
+  <p>08:17~08:18에 4대 모두 연결이 끊겨 인천항에서 6.3km(전체의 약 14%)까지만 기록됨.</p>
+  <figure>
+    <img src="sources/photos/fig_timeline_leg1.png" alt="인천에서 덕적도 구간의 장비별 측위 상태 타임라인" width="560">
+    <figcaption>그림 1. 인천 → 덕적도 구간 측위 상태. 실제 출항(선속 3kn 이상 첫 기록)부터 표시하고 20초 미만 변화는 생략함. 운항 단계는 Mapsea ① 선속 15kn 기준</figcaption>
+  </figure>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>장비</th><th>Fix</th><th>Float</th><th>DGPS·단독</th><th>미기록</th><th>결과</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Mapsea ① (듀얼 안테나)</td><td class="num">0%</td><td class="num">89.1%</td><td class="num">5.2%</td><td class="num">5.7%</td><td>출항 구간 내내 Float</td></tr>
+        <tr><td>Mapsea ② (PPP 모드)</td><td class="num">0%</td><td class="num">0%</td><td class="num">84.1%</td><td class="num">15.9%</td><td>단독측위만 출력</td></tr>
+        <tr><td>AD Navi XR2</td><td class="num">2.6%</td><td class="num">72.7%</td><td class="num">0%</td><td class="num">24.7%</td><td>출항 직후 4분 기록 없음</td></tr>
+        <tr><td>LG RTK</td><td class="num">33.0%</td><td class="num">4.4%</td><td class="num">8.3%</td><td class="num">54.3%</td><td>08:09부터 기록</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 1. 인천 출항 구간(08:00~08:17, 17.3분) 장비별 측위 상태. 구간 전체 시간을 100%로 한 비율</figcaption>
+  </figure>
+  <h3>2.2 덕적도 → 인천</h3>
+  <p>09:31 덕적도 출항부터 10:47 인천 접안까지 76분을 기록함. Mapsea ①과 AD Navi는 이 구간 전체가 남아 있음.</p>
+  <figure>
+    <img src="sources/photos/fig_timeline_leg2.png" alt="덕적도에서 인천 구간의 장비별 측위 상태 타임라인" width="560">
+    <figcaption>그림 2. 덕적도 → 인천 구간 측위 상태. 표시 기준은 그림 1과 같음</figcaption>
+  </figure>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>장비</th><th>Fix</th><th>Float</th><th>DGPS·단독</th><th>미기록</th><th>결과</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Mapsea ① (듀얼 안테나)</td><td class="num">9.6%</td><td class="num">86.7%</td><td class="num">3.7%</td><td class="num">0%</td><td>접안 직전 10:41부터 Fix, 오차 ±0.02m</td></tr>
+        <tr><td>Mapsea ② (PPP 모드)</td><td class="num">0%</td><td class="num">15.5%</td><td class="num">66.9%</td><td class="num">17.6%</td><td>PPP 수렴 전, Wi-Fi 끊김 12분</td></tr>
+        <tr><td>AD Navi XR2</td><td class="num">0.2%</td><td class="num">99.6%</td><td class="num">0.1%</td><td class="num">0.1%</td><td>끝까지 Float, 헤딩 대부분 미출력</td></tr>
+        <tr><td>LG RTK</td><td class="num">21.3%</td><td class="num">2.1%</td><td class="num">1.2%</td><td class="num">75.4%</td><td>운항 중 56분 기록 없음(USB 끊김)</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 2. 귀항 구간(09:31~10:47, 76.1분) 장비별 측위 상태. 기준은 표 1과 같음</figcaption>
+  </figure>
+  <p><strong>참고:</strong> Mapsea ① 헤딩은 자선 AIS와의 차이가 시간대마다 −158°~+94°로 바뀌어 쓸 수 없음(듀얼 안테나 설정 확인 필요). NTRIP 끊김(Mapsea ① 5회, AD Navi 2회)은 모두 4초 안에 재연결됨.</p>
+</section>
+
+<section data-sources="S2 S8 S9 S10">
+  <h2>3. AD Navi가 RTK Fix에 도달하지 못한 원인</h2>
+  <h3>3.1 로그로 확인한 상태</h3>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>항목</th><th>로그 값</th><th>판단</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>보정 수신</td><td>RTK 보정 미수신 경보 0.5%, 위치 포드 RTK 데이터 없음 경보 0회</td><td>정상</td></tr>
+        <tr><td>위성 수</td><td>위치·헤딩 포드 모두 32개 (매뉴얼 기준 7개 초과)</td><td>충분</td></tr>
+        <tr><td>기준국 거리</td><td>4~34km, 10:10~10:30에는 4~6km (매뉴얼 기준 50km 미만)</td><td>충분히 가까움</td></tr>
+        <tr><td>위치 포드</td><td>Fix 0.2%, 나머지는 Float</td><td><span class="accent">Fix 실패</span></td></tr>
+        <tr><td>헤딩 포드·헤딩</td><td>헤딩 포드 Fix 2.4%, 헤딩 출처 UNKNOWN 97.6%</td><td><span class="accent">헤딩 미출력</span></td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 3. AD Navi 상태 문장(하트비트·경보) 해석 결과. 귀항 구간 기준, 인터페이스 매뉴얼(MAN-0102) 6장 p.5, 8장 p.13~14</figcaption>
+  </figure>
+  <p>보정·위성·기준국 거리가 모두 정상인데 위치 포드가 Fix를 못 했으므로, 포드 주변의 수신 환경이 원인일 가능성이 높음. 매뉴얼도 Fix 실패·헤딩 경보에 대해 "하늘이 트인 곳으로 옮기라"고 권장함(MAN-0102 8.1, p.14).</p>
+
+  <h3>3.2 매뉴얼 기준과 실제 설치 비교</h3>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>원인 후보</th><th>매뉴얼 기준</th><th>3차 실증</th><th>가능성</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>① 기둥이 신호를<br>가리고 반사시킴</td><td>포드 반경 80~100cm 안에 장애물 없음<br>(UM 14장 p.17)<br>GNSS는 반사·장애물에 약함<br>(UM 11장 p.10)</td><td>포드를 계단 난간 기둥에<br>케이블 타이로 묶음(그림 3)</td><td><span class="accent">높음</span></td></tr>
+        <tr><td>② 포드 사이<br>기선이 짧음</td><td>기선 최소 5m<br>(UM 11장 p.11)</td><td>약 2.4m(로그)</td><td>낮음<br>헤딩·선수 위치 정확도에 영향</td></tr>
+        <tr><td>③ 두 포드가<br>대칭이 아님</td><td>같은 평면, 중심선에서 같은 거리로 대칭<br>(UM 11장 p.10)</td><td>중심선 거리 실측 기록 없음</td><td>낮음<br>헤딩·선수 위치 오차에 영향</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 4. RTK Fix 실패 원인 후보. UM = XR2 사용자 매뉴얼(MAN-0101 Rev.01), 쪽 번호는 원문 PDF 기준</figcaption>
+  </figure>
+  <p>②·③은 헤딩·선수 위치 정확도에 영향을 줄 뿐 RTK Fix와는 무관함. <strong>기둥에 묶어 설치한 것이 가장 유력한 원인</strong>임.</p>
+  <figure>
+    <img src="sources/photos/adnav_pods_IMG_1047.jpg" alt="AD Navi XR2 주황색 포드 3개를 계단 난간 기둥에 묶어 설치한 모습" width="300">
+    <figcaption>그림 3. AD Navi XR2 포드 3개(원 표시)를 계단 난간 기둥에 묶어 설치한 모습 (10:31 촬영)</figcaption>
+  </figure>
+</section>
+
+<section data-sources="S8 S9">
+  <h2>4. 다음 실증 설치 기준 (AD Navi)</h2>
+  <figure>
+    <img src="sources/photos/fig2_drawn.jpg" alt="XR2 포드의 폭 방향 배치와 중심축 평행 배치" width="600">
+    <figcaption>그림 4. AD Navi XR2 포드 설치 방식. 근거: XR2 사용자 매뉴얼(MAN-0101) 11장 p.11~12</figcaption>
+  </figure>
+  <ul>
+    <li><strong>① 폭 방향:</strong> 중심선과 수직·대칭, 헤딩 오프셋 입력(좌현 POS면 −90°, 우현 POS면 +90°) (UM 11장 p.11~12)</li>
+    <li><strong>② 중심축 평행:</strong> 두 포드를 일직선에, HDG 포드를 선수 쪽에 두고 오프셋 입력 안 함 (UM 11장 p.12)</li>
+    <li><strong>공통:</strong> 반경 80~100cm 장애물 없음(UM 14장 p.17), 기선 5m 이상(UM 11장 p.11), 좌우 무관(UM 13장 p.16)</li>
+  </ul>
+</section>
+
+</body>
+</html>

@@ -39,6 +39,7 @@ docs/reports/<sequence>-<report-slug>/
   - `references/allowed-elements.md`: `report.html`에 쓸 수 있는 요소와 출력 대응
   - `references/writing-rules.md`: 사실·해석 구분, 출처, 충돌 처리, 문장, 표와 그림
 - 새 보고서를 만들 때 `references/report-types.md`에서 종류별 구성을 확인해요.
+- 같은 종류의 완성 예시가 `assets/templates/examples/`에 있으면 장 구성과 표·그림 배치를 참고해요. 예시의 문장과 수치는 새 보고서에 옮기지 않아요.
 
 ## 스크립트
 

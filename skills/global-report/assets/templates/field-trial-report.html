@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>{{보고서 제목}}</title>
+</head>
+<body>
+<section class="cover compact">
+  <h1>{{보고서 제목}}</h1>
+  <p>{{실증 일자}} · {{장소·대상}} · 작성 {{작성자}}</p>
+</section>
+
+<aside class="callout">
+  <p><strong>요약</strong> {{장비별 핵심 결과와 가장 유력한 원인을 한두 문장으로}}</p>
+</aside>
+
+<section>
+  <h2>1. 실증 개요</h2>
+  <table>
+    <tbody>
+      <tr><th>일시·장소</th><td>{{일시, 장소, 시험 구간}}</td></tr>
+      <tr><th>장비</th><td>{{장비 수와 장비별 구분(모드·안테나 구성)}}</td></tr>
+      <tr><th>조건</th><td>{{보정·연결 방식처럼 장비마다 다른 조건}}</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>2. 장비별 결과</h2>
+  <h3>2.1 {{첫 번째 구간}}</h3>
+  <p>{{구간의 기록 범위와 특이 사항 한 줄}}</p>
+  <p>{{그림: 구간의 장비별 상태 타임라인. 그림 파일을 sources/에 넣고 figure로 바꿔요}}</p>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>장비</th><th>{{상태 1}}</th><th>{{상태 2}}</th><th>미기록</th><th>결과</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>{{장비}}</td><td class="num">{{비율}}</td><td class="num">{{비율}}</td><td class="num">{{비율}}</td><td>{{한 줄 결과}}</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 1. {{구간(시작~끝, 길이)}} 장비별 상태. 구간 전체 시간을 100%로 한 비율</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>3. {{핵심 문제}}의 원인</h2>
+  <h3>3.1 로그로 확인한 상태</h3>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>항목</th><th>로그 값</th><th>판단</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>{{항목}}</td><td>{{값과 비교 기준}}</td><td>{{정상·이상}}</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 2. {{로그 해석 기준과 근거 문서}}</figcaption>
+  </figure>
+  <h3>3.2 기준과 실제 설치 비교</h3>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>원인 후보</th><th>기준</th><th>실제</th><th>가능성</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>{{원인 후보}}</td><td>{{매뉴얼 기준}}<br>({{문서 장·쪽}})</td><td>{{실증에서 확인한 내용}}</td><td>{{높음·낮음}}</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 3. {{원인 후보와 근거 문서}}</figcaption>
+  </figure>
+  <p>{{결론: 가장 유력한 원인과 근거}}</p>
+</section>
+
+<section>
+  <h2>4. 다음 실증 기준</h2>
+  <ul>
+    <li><strong>{{기준}}:</strong> {{지킬 내용}} ({{문서 장·쪽}})</li>
+  </ul>
+</section>
+</body>
+</html>

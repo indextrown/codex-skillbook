@@ -91,12 +91,21 @@ test('캡션 없는 표는 장 안에 바로 쓸 수 있어요', (t) => {
 });
 
 test('보고서 종류별 틀은 자리 표시자만 남아요', (t) => {
-  for (const name of ['work-report', 'analysis-report', 'meeting-notes', 'proposal']) {
+  for (const name of ['work-report', 'analysis-report', 'meeting-notes', 'proposal', 'field-trial-report']) {
     const dir = sampleReport(t);
     fs.copyFileSync(path.join(SKILL, 'assets', 'templates', `${name}.html`), path.join(dir, 'report.html'));
     const result = lintReport(loadReport(dir));
     assert.deepEqual(result.errors, [], name);
     assert.ok(result.placeholders.length > 0, name);
+  }
+});
+
+test('완성 예시 보고서는 그대로 검사를 통과해요', () => {
+  const examples = path.join(SKILL, 'assets', 'templates', 'examples');
+  for (const name of fs.readdirSync(examples)) {
+    const result = lintReport(loadReport(path.join(examples, name)));
+    assert.deepEqual(result.errors, [], name);
+    assert.deepEqual(result.placeholders, [], name);
   }
 });
 
