@@ -66,7 +66,7 @@ html: "./tech-spec.html"
   - 여러 테마
   - Pages 고정 양식 자리 표시자 채우기
 - 각주는 첫 버전에서 지원하지 않아요. Chrome PDF에서 각주를 쪽 아래에 배치하는 방법이 없어서예요. 출처는 출처 기록과 참고 자료 목록으로 대신해요.
-- 회사 로고나 사내 브랜드 자산은 넣지 않아요. 이 저장소는 공개 저장소예요.
+- 회사 로고와 이미지 자산은 넣지 않아요. 이 저장소는 공개 저장소라서 색 값만 맵시 템플릿을 따라요.
 - 스킬이 `.gitignore`를 바꾸거나 보고서 폴더를 커밋하지 않아요. 커밋 여부는 사용자가 정해요.
 
 ## 계획
@@ -87,16 +87,17 @@ skills/global-report/
 │   ├── allowed-elements.md   ← 허용 태그·class와 Word 대응표
 │   └── report-types.md       ← 업무 보고·분석 보고·회의 결과·제안서 구성
 └── scripts/
-    ├── package.json          ← docx, HTML 파서 의존성 고정
+    ├── package.json          ← docx 의존성 고정 (package-lock.json 포함)
     ├── check_deps.mjs
     ├── lint_report.mjs
     ├── export_pdf.mjs
     ├── export_docx.mjs
     ├── export_pages.js       ← osascript -l JavaScript로 실행
-    └── render_preview.mjs
+    ├── render_preview.mjs
+    └── lib/                  ← HTML 파서, 검사, 인쇄 HTML, 작업 폴더 공용 함수
 ```
 
-스크립트는 Node.js로 작성해요. 이 저장소의 `bin/project-docs.js`와 같은 런타임이고, DOCX 생성에 쓸 `docx` 라이브러리도 Node용이에요. 테스트는 저장소의 `tests/`에 `node:test`로 추가해요.
+스크립트는 Node.js로 작성해요. 이 저장소의 `bin/project-docs.js`와 같은 런타임이고, DOCX 생성에 쓸 `docx` 라이브러리도 Node용이에요. `report.html`은 허용 요소만 쓰는 정돈된 HTML이라 작은 자체 파서로 읽어요. 그래서 검사와 PDF 출력은 npm 설치 없이 동작하고, `docx`는 DOCX 출력에만 필요해요. 테스트는 저장소의 `tests/`에 `node:test`로 추가해요.
 
 ### 사용 흐름
 
@@ -148,7 +149,7 @@ docs/reports/001-rtk-october/
 
 1. 호출마다 `spec.md`, `sources.md`, `report.html`을 먼저 읽어요.
 2. 받은 파일은 `sources/`에 복사하고 `sources.md`에 기록해요. 파일 종류별로 내용을 읽는 방법은 다음과 같아요.
-   - PDF: `pdftotext`
+   - PDF: `pdftotext`. 글꼴에 따라 `%`, 괄호, 하이픈 같은 기호가 빠질 수 있어서, 수치나 기호가 이상하면 쪽 이미지로 확인해요.
    - DOCX: macOS에서는 `textutil`, 그 밖의 환경에서는 LibreOffice
    - 이미지: 에이전트가 직접 봐요
    - CSV: 표로 읽어요
@@ -163,17 +164,21 @@ docs/reports/001-rtk-october/
 | report.html | PDF (report.css) | DOCX (Word 스타일) |
 | --- | --- | --- |
 | `<section class="cover">` 안의 `h1`, `p` | 첫 쪽 표지, 머리말·쪽 번호 없음 | 첫 쪽 표지(`Title`, `Subtitle`), 머리말·쪽 번호 없음 |
+| `<section class="cover compact">` 안의 `h1`, `p` | 첫 쪽 위쪽 제목 블록, 바로 본문 시작 | 첫 쪽 위쪽 `Title`, `Subtitle` |
 | `<h2>` | 장 제목 | `Heading 1` |
 | `<h3>` | 절 제목 | `Heading 2` |
 | `<h4>` | 소제목 | `Heading 3` |
 | `<p>` | 본문 | `Normal` |
-| `<strong>`, `<em>`, `<a>`, `<span class="accent">` | 굵게, 기울임, 링크, 강조색 | 굵게, 기울임, 하이퍼링크, 강조색 |
+| `<strong>`, `<em>`, `<a>`, `<span class="accent">`, `<br>` | 굵게, 기울임, 링크, 강조색, 줄바꿈 | 굵게, 기울임, 하이퍼링크, 강조색, 줄바꿈 |
 | `<ul>`, `<ol>` (2단계까지) | 목록 | 글머리·번호 목록 |
-| `<table>` (`thead`, `tbody`, `th`, `td`, `colspan`) | 표, 쪽마다 머리행 반복 | Word 표, 머리행 반복 |
-| `<figure>` 안의 `img`, `figcaption` | 그림과 캡션 | 문서에 넣은 이미지와 `Caption` |
+| `<table>` (`thead`, `tbody`, `th`, `td`, `colspan`, `class="num"`) | 표, 쪽마다 머리행 반복 | Word 표, 머리행 반복 |
+| `<figure>` 안의 `table`, `figcaption` | 캡션이 있는 표, 오른쪽 캡션 | 캡션이 있는 Word 표, `Table Caption` |
+| `<figure>` 안의 `img`, `figcaption` | 그림과 가운데 캡션 | 문서에 넣은 이미지와 `Caption` |
 | `<aside class="callout">` | 왼쪽 강조선이 있는 상자 | `Callout` |
 | `<nav class="toc">` | 목차(쪽 번호 없음) | Word 목차 필드 |
 
+- `body`에는 표지, 목차, 장 `section`, 요약 상자(`aside.callout`)만 바로 둬요. 장 `section`은 `h2`로 시작해요.
+- `cover compact`는 한두 쪽짜리 업무 보고·회의 결과처럼 표지 쪽 없이 첫 쪽 위에 제목을 두는 형식이에요.
 - `div` 레이아웃, 인라인 `style`, `script`, 목록에 없는 class는 쓰지 않아요.
 - 이미지는 `sources/` 또는 작업 폴더 안의 파일만 참조해요.
 
@@ -185,7 +190,12 @@ docs/reports/001-rtk-october/
   - PDF용으로는 TTF를 `@font-face`로 함께 넣어 Type 3 글꼴로 들어가는 문제를 피해요.
   - DOCX에는 Word 스타일의 글꼴 이름으로 Pretendard를 지정해요. 라틴 문자와 한글 모두 같은 글꼴이에요.
   - Pretendard는 SIL OFL 1.1 라이선스라 라이선스 파일과 함께 넣어요.
-- 기본 색은 진한 남색 본문, 회색 보조 글자, 파랑 강조색 하나예요. 한 쪽에 강조색을 여러 개 쓰지 않아요.
+- 색과 구성은 맵시 문서 표준 PPT 템플릿을 따라요. 템플릿에서 쓰는 색 값을 그대로 가져왔어요.
+  - 짙은 남색(`0C2D6F`): 제목 글자, 표지의 왼쪽 막대, 표 머리행 배경
+  - 파랑(`1A56DB`): 장 제목의 왼쪽 막대, 요약 상자 막대, 링크·강조
+  - 본문 남색(`111834`), 보조 회색(`5B667A`), 선(`D8E1EF`)
+  - 표 본문은 줄무늬(`F4F8FC`)로 행을 구분해요.
+- 공개 저장소라서 회사 로고는 넣지 않아요.
 
 ### PDF 내보내기
 
@@ -207,11 +217,18 @@ docs/reports/001-rtk-october/
 
 ### DOCX 내보내기
 
-`export_docx`는 `report.html`을 위에서부터 읽으면서 위 대응표에 따라 `docx` 라이브러리의 Word 요소를 만들어요.
+`export_docx`는 위 대응표에 따라 `report.html`을 Word 요소로 옮겨요. 일을 두 곳에 나눠 맡겨요.
+- **본문:** `docx` 9.11에 들어 있는 `docx/html`의 `htmlToContent`가 장들을 Word 문단, 표, 목록, 이미지로 바꿔요.
+  - 요소마다 쓸 Word 스타일은 CSS 선택자와 스타일 ID의 대응(`styleMap`)으로 정해요. 예: `h2` → `Heading1`
+  - 표 머리행 색, 줄무늬, 숫자 정렬은 `theme.json` 값으로 만든 작은 스타일시트로 정해요.
+- **직접 만드는 부분:** 표지, 목차, 머리말, 쪽 번호, Word 스타일 정의는 `export_docx`가 만들어요.
 - 스타일은 `theme.json` 값으로 정의해요.
 - 머리말에는 보고서 제목을 넣고, 꼬리말에는 쪽 번호 필드(PAGE / NUMPAGES)를 넣어요.
-- 표지는 첫 쪽 전용 머리말·꼬리말을 비워 둬요.
-- 이미지는 파일을 읽어 문서 안에 넣어요.
+- 표지 쪽과 목차는 각각 새 쪽에서 시작하는 구역으로 나눠요.
+  - 표지 구역에는 머리말·꼬리말이 없어요.
+  - 쪽 번호는 문서 전체로 이어져요.
+  - Pages는 구역 세로 정렬과 쪽 맨 위 문단의 앞 간격을 무시해요. 그래서 표지 제목 앞에 줄 높이를 고정한 빈 문단을 둬서 제목을 내려요.
+- 이미지는 파일을 읽어 문서 안에 넣어요. 본문 폭과 높이 110mm 안에 들어가도록 크기를 맞춰요.
 - 목차는 Word 목차 필드로 넣어요. Word는 파일을 열 때 필드를 업데이트할지 묻고, Pages는 쪽 번호를 계산해서 보여 줘요.
 
 ### Pages 내보내기
@@ -251,10 +268,11 @@ docs/reports/001-rtk-october/
   - Pages 출력은 `osascript`로 Pages에 Apple Event를 보내야 해요. Codex 샌드박스에서 이 호출이 막히는지 확인하지 못했어요.
   - 막히면 권한 상승 실행을 사용자에게 요청하는 절차를 SKILL.md에 적어요.
   - 그래도 실행할 수 없으면 Pages 출력만 건너뛰어요.
-- **Pretendard 글꼴 형식:** TTF를 `@font-face`로 넣으면 Chrome PDF에 Type 3 대신 TrueType으로 들어갈 것으로 보지만, 아직 확인하지 않았어요. 5단계에서 `pdffonts`로 확인해요.
+- **Pretendard 글꼴 형식:** TTF를 `@font-face`로 넣으면 Chrome PDF에 Type 3가 아니라 CID TrueType으로 들어가는 것을 `pdffonts`로 확인했어요.
 - **의존성 설치:**
   - `npx skills add`로 설치한 스킬 폴더에는 `node_modules`가 없어요. 처음 실행할 때 `npm ci`로 네트워크에서 내려받아야 해요.
-  - 오프라인에서는 DOCX와 Pages 출력이 동작하지 않아요. PDF 출력은 Chrome만 있으면 동작하도록 의존성을 분리해요.
+  - 오프라인에서는 DOCX와 Pages 출력이 동작하지 않아요. 검사와 PDF 출력은 자체 HTML 파서를 써서 Chrome만 있으면 동작해요.
+  - 스킬이 심볼릭 링크로 설치돼도 스크립트가 실행되도록, 직접 실행 여부를 실제 경로로 비교해요.
 - **LibreOffice 확인 결과의 한계:** LibreOffice는 Pretendard를 찾지 못해 Word·Pages와 다르게 보여 줘요. 결과 확인용으로는 Pages를 먼저 쓰고, LibreOffice 결과로는 글꼴과 굵게를 판단하지 않아요.
 - **보고서 내용의 공개 범위:** 보고서와 원본 자료에는 내부 정보가 들어갈 수 있어요. 스킬은 보고서를 커밋하거나 외부로 보내지 않아요. 저장소에 올릴지는 사용자가 정해요.
 
@@ -262,28 +280,28 @@ docs/reports/001-rtk-october/
 
 - [x] 1. 테크 스펙 승인
   - [x] 1-1. PDF, DOCX, Pages의 글꼴을 모두 Pretendard로 통일하기로 정했어요.
-  - [x] 1-2. 개발자가 현재 스펙을 승인했어요.
+  - [x] 1-2. 구현 중 바뀐 설계(맵시 색 테마, `docx/html` 사용, `cover compact`·`br`·`figure` 안의 표 추가)를 개발자가 검토하고 다시 승인했어요.
 - [ ] 2. 스킬 골격과 작성 규칙
-  - [ ] 2-1. `skills/global-report/`에 `SKILL.md`, `agents/openai.yaml`, `references/` 세 문서, 보고서 종류 4개의 섹션 틀을 만들어요.
+  - [x] 2-1. `skills/global-report/`에 `SKILL.md`, `agents/openai.yaml`, `references/` 세 문서, 보고서 종류 4개의 섹션 틀을 만들어요.
   - [ ] 2-2. 빈 프로젝트에서 `$global-report 새 보고서 …`를 호출하면 `docs/reports/001-<slug>/`에 `spec.md`, `report.html`, `sources.md`가 생겨요.
 - [ ] 3. 내용 쌓기
   - [ ] 3-1. 텍스트, PDF, DOCX, 이미지, CSV 자료를 `sources/`에 복사하고 `sources.md`에 ID와 반영 섹션을 기록해요.
   - [ ] 3-2. 두 번째 호출에서 첫 호출의 내용이 유지되고, 새 자료가 알맞은 섹션에 들어가요. 수치가 충돌하면 바꾸기 전에 물어요.
-- [ ] 4. 테마와 검사 스크립트
-  - [ ] 4-1. `theme.json`, `report.css`, Pretendard TTF와 OFL 라이선스를 추가해요.
-  - [ ] 4-2. `lint_report`가 허용하지 않은 태그, 없는 이미지, 남은 자리 표시자, 없는 출처 ID를 오류로 보고하는 테스트가 통과해요.
-- [ ] 5. PDF 내보내기
-  - [ ] 5-1. `export_pdf`가 Chrome 위치를 찾아 테스트용 보고서를 PDF로 출력해요.
-  - [ ] 5-2. 출력한 PDF에서 확인할 것: 표지에 머리말이 없어요. 둘째 쪽부터 "n / N" 쪽 번호가 있어요. `pdffonts`에 Type 3 글꼴이 없어요.
-- [ ] 6. DOCX 내보내기
-  - [ ] 6-1. `export_docx`가 대응표의 모든 요소를 Word 요소로 만들고, `theme.json` 값으로 스타일과 머리말·쪽 번호를 넣어요.
-  - [ ] 6-2. 테스트용 DOCX의 `word/document.xml`에서 확인할 것: `Heading1`~`Heading3` 스타일, 표 머리행 반복(`tblHeader`), 문서 안에 넣은 이미지. Pages로 렌더한 쪽 이미지도 눈으로 확인해요.
+- [x] 4. 테마와 검사 스크립트
+  - [x] 4-1. `theme.json`, `report.css`, Pretendard TTF와 OFL 라이선스를 추가해요.
+  - [x] 4-2. `lint_report`가 허용하지 않은 태그, 없는 이미지, 남은 자리 표시자, 없는 출처 ID를 오류로 보고하는 테스트가 통과해요.
+- [x] 5. PDF 내보내기
+  - [x] 5-1. `export_pdf`가 Chrome 위치를 찾아 테스트용 보고서를 PDF로 출력해요.
+  - [x] 5-2. 출력한 PDF에서 확인할 것: 표지에 머리말이 없어요. 둘째 쪽부터 "n / N" 쪽 번호가 있어요. `pdffonts`에 Type 3 글꼴이 없어요.
+- [x] 6. DOCX 내보내기
+  - [x] 6-1. `export_docx`가 대응표의 모든 요소를 Word 요소로 만들고, `theme.json` 값으로 스타일과 머리말·쪽 번호를 넣어요.
+  - [x] 6-2. 테스트용 DOCX의 `word/document.xml`에서 확인할 것: `Heading1`~`Heading3` 스타일, 표 머리행 반복(`tblHeader`), 문서 안에 넣은 이미지. Pages로 렌더한 쪽 이미지도 눈으로 확인해요.
 - [ ] 7. Pages 내보내기
-  - [ ] 7-1. `export_pages`가 DOCX를 열어 `.pages`로 저장하고, 사용자가 이미 열어 둔 Pages 문서는 닫지 않아요.
+  - [x] 7-1. `export_pages`가 DOCX를 열어 `.pages`로 저장하고, 사용자가 이미 열어 둔 Pages 문서는 닫지 않아요.
   - [ ] 7-2. Pages가 없거나 권한이 거부되면 PDF·DOCX 결과를 유지한 채 안내해요. Codex 샌드박스에서 실행할 수 있는지 확인해요.
-- [ ] 8. 결과 확인과 의존성 점검
-  - [ ] 8-1. `render_preview`가 PDF·DOCX 결과를 쪽별 PNG로 만들어요. `check_deps`는 `node_modules`가 없으면 `npm ci`를 실행해요.
-  - [ ] 8-2. 도구가 빠진 환경에서 `check_deps`가 빠진 도구와 설치 명령을 출력해요.
+- [x] 8. 결과 확인과 의존성 점검
+  - [x] 8-1. `render_preview`가 PDF·DOCX 결과를 쪽별 PNG로 만들어요. `check_deps`는 `node_modules`가 없으면 `npm ci`를 실행해요.
+  - [x] 8-2. 도구가 빠진 환경에서 `check_deps`가 빠진 도구와 설치 명령을 출력해요.
 - [ ] 9. 문서화와 전체 시나리오
-  - [ ] 9-1. README의 "자주 사용하는 스킬" 표에 `global-report`를 추가해요.
+  - [x] 9-1. README의 "자주 사용하는 스킬" 표에 `global-report`를 추가해요.
   - [ ] 9-2. 생성 → 자료 추가 → 내보내기 순서로 세 번 호출하면 PDF, DOCX, Pages 파일이 모두 만들어져요.

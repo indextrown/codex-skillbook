@@ -226,6 +226,7 @@ hook을 갱신할지 판단하는 해시는 커밋되는 `.project-docs/manifest
 | 아이디어 그릴링 | [global-grilling](./skills/global-grilling/SKILL.md) | 중요한 미결정 사항을 질문으로 확인해요. 개발 기능은 결정을 확인한 뒤 테크 스펙 초안으로 인계하고, 승인 전에는 구현하지 않아요.<br><br>**사용 예시**<br>`$global-grilling 프로젝트별 이메일 알림 기능 아이디어를 질문으로 검토해줘.` |
 | 테크 스펙 작성 | [global-tech-spec](./skills/global-tech-spec/SKILL.md) | 기능 요구사항이나 그릴링 결정을 `docs/tech-specs/001-<feature-slug>/`의 Markdown·HTML로 정리해요. 훅으로 두 파일을 동기화하고 개발자의 수정·승인을 거쳐요.<br><br>**사용 예시**<br>`$global-tech-spec 프로젝트별 이메일 알림 설정 기능의 테크 스펙을 만들어줘.` |
 | 기술 문서 작성 | [global-technical-writing](./skills/global-technical-writing/SKILL.md) | 기술 문서를 구조화하고, 명확하고 자연스러운 한국어 문체로 작성하거나 다듬습니다.<br><br>**사용 예시**<br>`$global-technical-writing API 인증 가이드를 사용자가 바로 따라 할 수 있게 작성해줘.` |
+| 보고서 작성 | [global-report](./skills/global-report/SKILL.md) | 여러 번 나눠 건넨 내용과 파일을 `docs/reports/`의 보고서 하나에 쌓고, 같은 HTML 원본에서 PDF·DOCX·Pages 파일을 만들어요. Node.js 22와 Chrome이 필요하고, Pages 출력은 macOS의 Pages가 있어야 해요.<br><br>**사용 예시**<br>`$global-report 새 보고서: 10월 RTK 진행 보고, 팀장님 보고용`<br>`$global-report (회의록.pdf 첨부) 이 내용 반영하고 PDF로 내보내줘` |
 
 ## 레거시 스킬
 
