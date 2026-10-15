@@ -8,7 +8,7 @@
 | `spec.md` | 목적·독자·문체와 작성 중 내린 결정 기록 |
 | `sources.md` | 자료 목록(S1~S10) |
 | `sources/photos/` | 보고서에 들어간 그림 4개 |
-| `exports/` | 최종 PDF(v13) |
+| `exports/` | 최종 PDF(v14) |
 
 `sources.md`에 적힌 로그, 집계 스크립트, 화면 녹화 장면은 용량과 원본 보관 위치 때문에 넣지 않았어요. `lint_report.mjs`는 그림과 출처 ID만 확인하므로 이 폴더 그대로 검사와 내보내기를 할 수 있어요.
 
