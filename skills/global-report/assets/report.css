@@ -173,6 +173,18 @@ figure:has(img) {
   break-inside: avoid;
 }
 
+/* 14행 이하의 짧은 표는 쪽 사이에서 나누지 않아요. 긴 표는 머리행을 반복하며 나눠요. */
+figure:has(table):not(:has(tbody tr:nth-child(15))),
+table:not(:has(tbody tr:nth-child(15))) {
+  break-inside: avoid;
+}
+
+/* 표 바로 앞의 소개 문단은 표와 같은 쪽에 둬요. */
+p:has(+ figure:has(table)),
+p:has(+ table) {
+  break-after: avoid;
+}
+
 figure img {
   display: block;
   max-width: 100%;
