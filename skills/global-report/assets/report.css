@@ -179,8 +179,8 @@ table:not(:has(tbody tr:nth-child(15))) {
   break-inside: avoid;
 }
 
-/* 표 바로 앞의 소개 문단은 표와 같은 쪽에 둬요. */
-p:has(+ figure:has(table)),
+/* 표·그림 바로 앞의 소개 문단은 표·그림과 같은 쪽에 둬요. */
+p:has(+ figure),
 p:has(+ table) {
   break-after: avoid;
 }
