@@ -264,10 +264,12 @@ docs/reports/001-rtk-october/
 ## 고려 사항
 
 - **DOCX 글꼴:** 받는 사람 PC에 Pretendard가 없으면 Word가 다른 글꼴로 바꿔 보여 줘요. 이 경우를 감수하고 모든 형식을 Pretendard로 통일하기로 했어요(2026-10-15).
-- **Codex 샌드박스에서 앱 제어:**
-  - Pages 출력은 `osascript`로 Pages에 Apple Event를 보내야 해요. Codex 샌드박스에서 이 호출이 막히는지 확인하지 못했어요.
-  - 막히면 권한 상승 실행을 사용자에게 요청하는 절차를 SKILL.md에 적어요.
-  - 그래도 실행할 수 없으면 Pages 출력만 건너뛰어요.
+- **Codex 샌드박스에서 앱 제어 (2026-10-15 Codex CLI 0.160.0으로 확인):**
+  - macOS의 `workspace-write` 샌드박스(`CODEX_SANDBOX=seatbelt`)는 Chrome, Pages, LibreOffice 실행을 막아요. 앱 위치 조회도 막혀서 설치된 Pages가 없는 것처럼 보여요.
+  - 샌드박스 안에서 되는 일: 검사, DOCX 생성, PDF 쪽 이미지 만들기, `pdftotext`·`textutil`로 자료 읽기
+  - 샌드박스 밖 실행이 필요한 일: PDF 출력, Pages 출력, DOCX·Pages 확인 렌더
+  - 스크립트는 `CODEX_SANDBOX`를 보고 앱 실행 전에 종료 코드 3과 "샌드박스 밖 실행 승인 요청" 안내를 출력해요. SKILL.md는 이때 그 명령만 권한 상승을 요청하도록 안내해요.
+  - 승인 요청이 가능한 실행에서는 승인 뒤 PDF와 Pages가 만들어졌어요. 승인할 수 없는 실행에서는 DOCX만 만들고, 사용자가 직접 실행할 명령을 안내했어요.
 - **Pretendard 글꼴 형식:** TTF를 `@font-face`로 넣으면 Chrome PDF에 Type 3가 아니라 CID TrueType으로 들어가는 것을 `pdffonts`로 확인했어요.
 - **의존성 설치:**
   - `npx skills add`로 설치한 스킬 폴더에는 `node_modules`가 없어요. 처음 실행할 때 `npm ci`로 네트워크에서 내려받아야 해요.
@@ -281,12 +283,12 @@ docs/reports/001-rtk-october/
 - [x] 1. 테크 스펙 승인
   - [x] 1-1. PDF, DOCX, Pages의 글꼴을 모두 Pretendard로 통일하기로 정했어요.
   - [x] 1-2. 구현 중 바뀐 설계(맵시 색 테마, `docx/html` 사용, `cover compact`·`br`·`figure` 안의 표 추가)를 개발자가 검토하고 다시 승인했어요.
-- [ ] 2. 스킬 골격과 작성 규칙
+- [x] 2. 스킬 골격과 작성 규칙
   - [x] 2-1. `skills/global-report/`에 `SKILL.md`, `agents/openai.yaml`, `references/` 세 문서, 보고서 종류 4개의 섹션 틀을 만들어요.
-  - [ ] 2-2. 빈 프로젝트에서 `$global-report 새 보고서 …`를 호출하면 `docs/reports/001-<slug>/`에 `spec.md`, `report.html`, `sources.md`가 생겨요.
-- [ ] 3. 내용 쌓기
-  - [ ] 3-1. 텍스트, PDF, DOCX, 이미지, CSV 자료를 `sources/`에 복사하고 `sources.md`에 ID와 반영 섹션을 기록해요.
-  - [ ] 3-2. 두 번째 호출에서 첫 호출의 내용이 유지되고, 새 자료가 알맞은 섹션에 들어가요. 수치가 충돌하면 바꾸기 전에 물어요.
+  - [x] 2-2. 빈 프로젝트에서 `$global-report 새 보고서 …`를 호출하면 `docs/reports/001-<slug>/`에 `spec.md`, `report.html`, `sources.md`가 생겨요.
+- [x] 3. 내용 쌓기
+  - [x] 3-1. 텍스트, PDF, DOCX, 이미지, CSV 자료를 `sources/`에 복사하고 `sources.md`에 ID와 반영 섹션을 기록해요.
+  - [x] 3-2. 두 번째 호출에서 첫 호출의 내용이 유지되고, 새 자료가 알맞은 섹션에 들어가요. 수치가 충돌하면 바꾸기 전에 물어요.
 - [x] 4. 테마와 검사 스크립트
   - [x] 4-1. `theme.json`, `report.css`, Pretendard TTF와 OFL 라이선스를 추가해요.
   - [x] 4-2. `lint_report`가 허용하지 않은 태그, 없는 이미지, 남은 자리 표시자, 없는 출처 ID를 오류로 보고하는 테스트가 통과해요.
@@ -296,12 +298,12 @@ docs/reports/001-rtk-october/
 - [x] 6. DOCX 내보내기
   - [x] 6-1. `export_docx`가 대응표의 모든 요소를 Word 요소로 만들고, `theme.json` 값으로 스타일과 머리말·쪽 번호를 넣어요.
   - [x] 6-2. 테스트용 DOCX의 `word/document.xml`에서 확인할 것: `Heading1`~`Heading3` 스타일, 표 머리행 반복(`tblHeader`), 문서 안에 넣은 이미지. Pages로 렌더한 쪽 이미지도 눈으로 확인해요.
-- [ ] 7. Pages 내보내기
+- [x] 7. Pages 내보내기
   - [x] 7-1. `export_pages`가 DOCX를 열어 `.pages`로 저장하고, 사용자가 이미 열어 둔 Pages 문서는 닫지 않아요.
-  - [ ] 7-2. Pages가 없거나 권한이 거부되면 PDF·DOCX 결과를 유지한 채 안내해요. Codex 샌드박스에서 실행할 수 있는지 확인해요.
+  - [x] 7-2. Pages가 없거나 권한이 거부되면 PDF·DOCX 결과를 유지한 채 안내해요. Codex 샌드박스에서 실행할 수 있는지 확인해요.
 - [x] 8. 결과 확인과 의존성 점검
   - [x] 8-1. `render_preview`가 PDF·DOCX 결과를 쪽별 PNG로 만들어요. `check_deps`는 `node_modules`가 없으면 `npm ci`를 실행해요.
   - [x] 8-2. 도구가 빠진 환경에서 `check_deps`가 빠진 도구와 설치 명령을 출력해요.
-- [ ] 9. 문서화와 전체 시나리오
+- [x] 9. 문서화와 전체 시나리오
   - [x] 9-1. README의 "자주 사용하는 스킬" 표에 `global-report`를 추가해요.
-  - [ ] 9-2. 생성 → 자료 추가 → 내보내기 순서로 세 번 호출하면 PDF, DOCX, Pages 파일이 모두 만들어져요.
+  - [x] 9-2. 생성 → 자료 추가 → 내보내기 순서로 세 번 호출하면 PDF, DOCX, Pages 파일이 모두 만들어져요.
