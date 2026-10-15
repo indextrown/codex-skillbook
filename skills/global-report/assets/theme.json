@@ -1,0 +1,52 @@
+{
+  "font": {
+    "family": "Pretendard",
+    "files": {
+      "regular": "fonts/Pretendard-Regular.ttf",
+      "bold": "fonts/Pretendard-Bold.ttf"
+    }
+  },
+  "color": {
+    "ink": "111834",
+    "muted": "5B667A",
+    "subtle": "9AA3B2",
+    "navy": "0C2D6F",
+    "accent": "1A56DB",
+    "line": "D8E1EF",
+    "tint": "EEF3FB",
+    "zebra": "F4F8FC"
+  },
+  "size": {
+    "title": 24,
+    "subtitle": 10,
+    "heading1": 15,
+    "heading2": 12,
+    "heading3": 10.5,
+    "body": 10.5,
+    "table": 9.5,
+    "caption": 8.5,
+    "header": 8
+  },
+  "lineHeight": 1.33,
+  "spacing": {
+    "paragraphAfter": 6,
+    "heading1Before": 36,
+    "heading1After": 7,
+    "heading2Before": 12,
+    "heading2After": 5,
+    "heading3Before": 9,
+    "heading3After": 4
+  },
+  "bar": {
+    "title": 1.6,
+    "heading1": 1.2,
+    "callout": 1.2
+  },
+  "page": {
+    "width": 210,
+    "height": 297,
+    "margin": { "top": 22, "bottom": 22, "left": 20, "right": 20 },
+    "headerDistance": 10,
+    "footerDistance": 10
+  }
+}

@@ -213,6 +213,116 @@ npx --yes --package=github:indextrown/codex-skillbook -- project-docs hooks ios-
 
 hook을 갱신할지 판단하는 해시는 커밋되는 `.project-docs/manifest.json`이 아니라 로컬 git 설정(`project-docs.pre-push.hash`)에 저장해요. 수정하지 않은 hook만 최신 템플릿으로 갱신하고, 직접 고친 hook은 `SKIP_MODIFIED`로 보존해요. 리뷰에는 로그인한 `claude` CLI, `jq`, `perl`이 필요하고 push마다 API 비용이 들어요.
 
+## 보고서 작성 스킬 사용하기
+
+`global-report`는 여러 번 나눠 건넨 내용과 파일을 보고서 하나에 쌓고, 같은 HTML 원본에서 PDF·DOCX·Pages 파일을 만들어요. 호출할 때마다 보고서 폴더의 결정 기록과 자료 목록을 다시 읽어요. 그래서 다음 날 이어서 작업해도 처음부터 설명하지 않아도 돼요.
+
+### 준비하기
+
+| 도구 | 쓰는 곳 | 필요 여부 |
+| --- | --- | --- |
+| Node.js 22 이상 | 검사·내보내기 스크립트 | 필수 |
+| Google Chrome | PDF 출력 | 필수 |
+| poppler(`pdfinfo`, `pdftoppm`, `pdffonts`) | 내보낸 파일 확인, 쪽 미리보기 | 필수 |
+| `docx` npm 패키지 | DOCX 출력 | 필수. 처음 실행할 때 스킬이 설치해요. |
+| Pages(macOS) | `.pages` 출력, DOCX 확인 | 선택 |
+| LibreOffice | Pages가 없을 때 DOCX 확인 | 선택 |
+| `pdftotext`, `textutil` | PDF·DOCX 자료 읽기 | 선택 |
+
+macOS에서는 `brew install poppler`로 poppler를 설치해요. Codex에 `$global-report 필요한 도구가 다 있는지 확인해줘`라고 요청하면 `check_deps.mjs`로 확인하고 빠진 도구의 설치 방법을 알려 줘요.
+
+```bash
+# 보고서 스킬만 설치
+npx skills add indextrown/codex-skillbook --skill global-report --agent codex --global --yes
+
+# 보고서 스킬만 업데이트
+npx skills update --global global-report
+```
+
+### 작업 흐름
+
+1. **새 보고서 시작**: 제목, 독자, 출력 형식을 한 번에 말해요. 목적·독자·출력 형식·보고서 종류 중 빠진 것만 물어요. 답이 없어도 기본값(업무 보고, PDF)으로 초안을 만들 수 있으면 가정을 `spec.md`에 적고 진행해요.
+2. **자료 추가**: 파일을 첨부하거나 내용을 붙여 넣어요. 여러 번에 나눠 줘도 돼요.
+   - 파일은 `sources/`에 복사되고 `sources.md`에 S1, S2… 같은 ID로 기록돼요.
+   - 새 내용은 끝에 붙이지 않고 알맞은 장에 들어가요.
+   - 기존 수치와 다른 값이 오면 두 값과 출처를 보여 주고 어느 쪽을 쓸지 물어요. 정한 내용은 `spec.md`의 결정 기록에 남아요.
+3. **상태 확인**: 이번에 반영한 장, 아직 비어 있는 자리(`{{…}}`), 확인이 필요한 내용을 알려 줘요.
+4. **내보내기**: PDF·DOCX·Pages 중 원하는 형식을 말해요. 검사를 통과해야 내보내고, 쪽 이미지를 직접 확인한 뒤 결과를 알려 줘요. 다시 내보내면 `v2`, `v3`처럼 번호가 올라가고 이전 파일은 남아요.
+5. **이어서 작업**: 같은 저장소나 폴더에서 보고서 번호나 이름을 말하면 `spec.md`의 결정 기록부터 다시 읽고 이어 가요.
+
+### 요청 예시
+
+```text
+$global-report 새 보고서: 10월 RTK 진행 보고, 팀장님 보고용, PDF로
+```
+
+```text
+$global-report (회의록.pdf 첨부) 이 내용을 2장에 반영해줘
+```
+
+```text
+$global-report 001 보고서 지금 상태 알려줘
+```
+
+```text
+$global-report 001 보고서 PDF랑 DOCX로 내보내줘
+```
+
+```text
+$global-report 새 보고서: 3차 RTK 실증 결과 보고. 실증 결과 종류로, 표지 없이 2~3쪽. 로그는 ~/Downloads/3차 실증/Log 폴더에 있어
+```
+
+### 만들어지는 폴더
+
+스킬을 실행한 저장소 루트에 보고서마다 폴더를 만들어요. git 저장소가 아니면 현재 폴더를 기준으로 해요.
+
+```text
+docs/reports/001-rtk-october-status/
+├── spec.md       ← 목적·독자·형식·문체·결정 기록·미결 사항
+├── report.html   ← 보고서 원본. 고칠 때는 이 파일만 고쳐요.
+├── sources.md    ← 받은 자료 목록(S1, S2…)
+├── sources/      ← 받은 파일 원본과 그림
+└── exports/      ← <제목>_v<N>_<YYYYMMDD>.pdf / .docx / .pages
+```
+
+- 보고서 폴더는 자동으로 커밋하지 않아요. 저장소에 올릴지는 직접 정해요.
+- `exports/`의 파일은 고치지 않아요. `report.html`을 고친 뒤 다시 내보내요.
+- 폴더를 통째로 다른 컴퓨터로 옮겨도, 그 폴더에서 스킬을 부르면 이어서 작업할 수 있어요.
+
+### 보고서 종류
+
+새 보고서는 종류에 맞는 틀(`skills/global-report/assets/templates/`)에서 시작해요. 틀의 장 구성은 출발점이라, 원하는 구성이 있으면 말하면 돼요.
+
+| 종류 | 틀 | 표지·목차 | 잘 맞는 경우 |
+| --- | --- | --- | --- |
+| 업무 보고 | `work-report.html` | 위쪽 제목 블록 | 주간·월간 진행 보고, 한두 쪽 |
+| 분석 보고 | `analysis-report.html` | 표지 쪽, 목차 | 조사·분석 결과, 여러 쪽 |
+| 회의 결과 | `meeting-notes.html` | 위쪽 제목 블록 | 회의록, 논의 정리 |
+| 제안서 | `proposal.html` | 표지 쪽, 목차 | 기획안, 도입 제안 |
+| 실증 결과 | `field-trial-report.html` | 위쪽 제목 블록 | 현장 시험·실증, 장비 비교와 원인 분석 |
+
+완성 예시는 [`examples/rtk-trial3-passenger-ship`](./skills/global-report/assets/templates/examples/rtk-trial3-passenger-ship/)에 있어요. 3차 RTK 실증(여객선) 보고서의 원본, 그림, 결정 기록, 최종 PDF를 그대로 담았어요. 같은 종류의 보고서를 만들 때 장 구성과 표·그림 배치를 참고해요.
+
+### 출력 형식
+
+| 형식 | 만드는 방법 | 알아 둘 점 |
+| --- | --- | --- |
+| PDF | `report.html`을 Chrome으로 그대로 인쇄해요. | 머리말과 `n / N` 쪽 번호가 들어가고, Pretendard 글꼴을 문서에 넣어요. |
+| DOCX | `report.html`의 구조를 Word 요소로 옮기고 `theme.json`으로 만든 Word 스타일을 입혀요. | 목차, 머리말, 쪽 번호는 Word 필드로 들어가요. |
+| Pages | 만든 DOCX를 Pages로 열어 `.pages`로 저장해요. | macOS와 Pages가 필요해요. 처음에는 자동화 권한을 허용해야 해요. |
+
+### Codex 샌드박스에서 내보낼 때
+
+macOS의 Codex 샌드박스는 Chrome, Pages, LibreOffice 실행을 막아요. PDF나 Pages를 내보낼 때 스크립트가 이를 감지하면 Codex가 그 명령만 샌드박스 밖에서 실행할지 물어요.
+
+- 승인하면 그대로 이어서 만들어요.
+- 거절하면 DOCX까지만 만들고, 터미널에서 직접 실행할 명령을 알려 줘요.
+- 샌드박스 밖에서도 Pages가 실패하면 시스템 설정 > 개인정보 보호 및 보안 > 자동화에서 Pages 제어를 허용해요.
+
+### 모양 바꾸기
+
+색, 글꼴 크기, 장 사이 간격은 `skills/global-report/assets/theme.json` 한 곳에서 정하고 PDF와 DOCX가 같은 값을 써요. `report.html`에는 [허용 요소](./skills/global-report/references/allowed-elements.md)만 쓸 수 있고 `style` 속성은 쓸 수 없어요. 그래서 보고서 하나만 모양을 따로 바꿀 수는 없어요.
+
 ## 자주 사용하는 스킬
 
 | 한글 제목 | 스킬 | 설명 |
@@ -226,6 +336,7 @@ hook을 갱신할지 판단하는 해시는 커밋되는 `.project-docs/manifest
 | 아이디어 그릴링 | [global-grilling](./skills/global-grilling/SKILL.md) | 중요한 미결정 사항을 질문으로 확인해요. 개발 기능은 결정을 확인한 뒤 테크 스펙 초안으로 인계하고, 승인 전에는 구현하지 않아요.<br><br>**사용 예시**<br>`$global-grilling 프로젝트별 이메일 알림 기능 아이디어를 질문으로 검토해줘.` |
 | 테크 스펙 작성 | [global-tech-spec](./skills/global-tech-spec/SKILL.md) | 기능 요구사항이나 그릴링 결정을 `docs/tech-specs/001-<feature-slug>/`의 Markdown·HTML로 정리해요. 훅으로 두 파일을 동기화하고 개발자의 수정·승인을 거쳐요.<br><br>**사용 예시**<br>`$global-tech-spec 프로젝트별 이메일 알림 설정 기능의 테크 스펙을 만들어줘.` |
 | 기술 문서 작성 | [global-technical-writing](./skills/global-technical-writing/SKILL.md) | 기술 문서를 구조화하고, 명확하고 자연스러운 한국어 문체로 작성하거나 다듬습니다.<br><br>**사용 예시**<br>`$global-technical-writing API 인증 가이드를 사용자가 바로 따라 할 수 있게 작성해줘.` |
+| 보고서 작성 | [global-report](./skills/global-report/SKILL.md) | 여러 번 나눠 건넨 내용과 파일을 `docs/reports/`의 보고서 하나에 쌓고, 같은 HTML 원본에서 PDF·DOCX·Pages 파일을 만들어요. Node.js 22와 Chrome이 필요하고, Pages 출력은 macOS의 Pages가 있어야 해요.<br><br>**사용 예시**<br>`$global-report 새 보고서: 10월 RTK 진행 보고, 팀장님 보고용`<br>`$global-report (회의록.pdf 첨부) 이 내용 반영하고 PDF로 내보내줘`<br><br>자세한 사용법은 [보고서 작성 스킬 사용하기](#보고서-작성-스킬-사용하기)를 참고하세요. |
 
 ## 레거시 스킬
 

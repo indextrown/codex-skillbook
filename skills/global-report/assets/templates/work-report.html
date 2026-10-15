@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>{{보고서 제목}}</title>
+</head>
+<body>
+<section class="cover compact">
+  <h1>{{보고서 제목}}</h1>
+  <p>{{보고 기간}} · {{작성 부서}} · 작성 {{작성자}}</p>
+</section>
+
+<aside class="callout">
+  <p><strong>요약</strong> {{이번 기간의 결과를 한두 문장으로}}</p>
+</aside>
+
+<section>
+  <h2>1. 이번 기간 한 일</h2>
+  <p>{{완료한 일과 그 결과}}</p>
+</section>
+
+<section>
+  <h2>2. 진행 현황</h2>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>작업</th><th>상태</th><th class="num">진척</th><th>담당</th><th>비고</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>{{작업}}</td><td>{{상태}}</td><td class="num">{{진척}}</td><td>{{담당}}</td><td>{{비고}}</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 1. 작업별 진행 현황 ({{기준 날짜}} 기준)</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>3. 이슈와 대응</h2>
+  <p><strong>{{이슈 이름}}:</strong> {{원인과 대응}}</p>
+</section>
+
+<section>
+  <h2>4. 다음 계획</h2>
+  <ol>
+    <li>{{다음 기간에 할 일}}</li>
+  </ol>
+</section>
+</body>
+</html>

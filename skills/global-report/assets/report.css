@@ -1,0 +1,250 @@
+/*
+ * 보고서 인쇄 스타일. 맵시 문서 템플릿의 짙은 남색·파랑 구성을 따라요.
+ * 색·크기·간격은 export_pdf.mjs가 theme.json에서 만든 CSS 변수로 주입해요.
+ * 값을 바꿀 때는 이 파일이 아니라 theme.json을 고쳐요. DOCX도 같은 값을 써요.
+ */
+
+html {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--size-body);
+  line-height: var(--line-height);
+  color: var(--ink);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* 표지: 왼쪽 남색 막대와 남색 제목 */
+section.cover {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: var(--cover-height);
+  break-after: page;
+}
+
+section.cover h1,
+section.cover p {
+  padding-left: 5mm;
+  border-left: var(--bar-title) solid var(--navy);
+}
+
+section.cover h1 {
+  margin: 0;
+  padding-bottom: 2mm;
+  font-size: var(--size-title);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--navy);
+}
+
+section.cover p {
+  margin: 0;
+  padding-bottom: 1mm;
+  font-size: var(--size-subtitle);
+  color: var(--muted);
+}
+
+section.cover.compact {
+  display: block;
+  height: auto;
+  margin-bottom: 5mm;
+  break-after: auto;
+}
+
+/* 목차: export_pdf.mjs가 장·절 제목으로 채워요. */
+nav.toc {
+  break-after: page;
+}
+
+nav.toc .toc-title {
+  margin: 0 0 5mm;
+  font-size: var(--size-heading1);
+  font-weight: 700;
+  color: var(--navy);
+}
+
+nav.toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+nav.toc li {
+  padding: 1.6mm 0;
+  border-bottom: 0.5pt solid var(--line);
+  color: var(--navy);
+}
+
+nav.toc li.toc-level-2 {
+  padding-left: 6mm;
+  color: var(--muted);
+}
+
+/* 제목: 장 제목은 남색 글자와 왼쪽 파란 막대 */
+h2,
+h3,
+h4 {
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--navy);
+  break-after: avoid;
+}
+
+h2 {
+  margin: var(--heading1-before) 0 var(--heading1-after);
+  padding-left: 3mm;
+  border-left: var(--bar-heading1) solid var(--accent);
+  font-size: var(--size-heading1);
+}
+
+h3 {
+  margin: var(--heading2-before) 0 var(--heading2-after);
+  font-size: var(--size-heading2);
+}
+
+h4 {
+  margin: var(--heading3-before) 0 var(--heading3-after);
+  font-size: var(--size-heading3);
+}
+
+/* 본문 */
+p {
+  margin: 0 0 var(--paragraph-after);
+  orphans: 2;
+  widows: 2;
+}
+
+strong {
+  font-weight: 700;
+}
+
+.accent,
+a {
+  color: var(--accent);
+}
+
+ul,
+ol {
+  margin: 0 0 var(--paragraph-after);
+  padding-left: 6mm;
+}
+
+li {
+  margin: 0 0 1mm;
+}
+
+li::marker {
+  color: var(--accent);
+}
+
+li > ul,
+li > ol {
+  margin: 1mm 0 0;
+}
+
+ol ol {
+  list-style-type: lower-alpha;
+}
+
+aside.callout {
+  margin: 3mm 0 4mm;
+  padding: 2.5mm 4mm;
+  border-left: var(--bar-callout) solid var(--accent);
+  background: var(--tint);
+  break-inside: avoid;
+}
+
+aside.callout p:last-child {
+  margin-bottom: 0;
+}
+
+/* 그림과 표: 머리행은 남색 바탕에 흰 글자 */
+figure {
+  margin: 4mm 0;
+}
+
+figure:has(img) {
+  break-inside: avoid;
+}
+
+/* 14행 이하의 짧은 표는 쪽 사이에서 나누지 않아요. 긴 표는 머리행을 반복하며 나눠요. */
+figure:has(table):not(:has(tbody tr:nth-child(15))),
+table:not(:has(tbody tr:nth-child(15))) {
+  break-inside: avoid;
+}
+
+/* 표·그림 바로 앞의 소개 문단은 표·그림과 같은 쪽에 둬요. */
+p:has(+ figure),
+p:has(+ table) {
+  break-after: avoid;
+}
+
+figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 110mm;
+  margin: 0 auto;
+}
+
+figcaption {
+  margin-top: 1.5mm;
+  font-size: var(--size-caption);
+  color: var(--muted);
+  text-align: center;
+}
+
+figure:has(table) figcaption {
+  text-align: right;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--size-table);
+  line-height: 1.35;
+}
+
+thead {
+  display: table-header-group;
+}
+
+th,
+td {
+  padding: 1.3mm 2mm;
+  border: 0.5pt solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+thead th {
+  border-color: var(--navy);
+  font-weight: 700;
+  color: #fff;
+  background: var(--navy);
+}
+
+tbody th {
+  font-weight: 700;
+  color: var(--navy);
+  background: var(--tint);
+}
+
+tbody tr:nth-child(even) td {
+  background: var(--zebra);
+}
+
+th.num,
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+tr {
+  break-inside: avoid;
+}

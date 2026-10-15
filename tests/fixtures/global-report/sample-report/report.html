@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>RTK 데모 앱 10월 진행 보고</title>
+</head>
+<body>
+<section class="cover">
+  <h1>RTK 데모 앱 10월 진행 보고</h1>
+  <p>2026년 10월 셋째 주 · 개발팀</p>
+  <p>작성 김개발 · 검토 이팀장</p>
+</section>
+
+<nav class="toc"></nav>
+
+<aside class="callout">
+  <p><strong>요약</strong> 장비 연결과 NMEA 파서를 마무리했고, 보정 중계는 70%까지 진행했어요.</p>
+</aside>
+
+<section data-sources="S1">
+  <h2>1. 이번 주 한 일</h2>
+  <p>이번 주에는 RTK 장비와 앱 사이의 <strong>연결 안정성</strong>을 개선했어요. 재연결 시간은 <span class="accent">12초에서 3초</span>로 줄었어요.</p>
+  <ul>
+    <li>장비 설정 요청과 NTRIP 보정 요청의 경로를 나눴어요.</li>
+    <li>NMEA 파서에서 빈 칸과 0을 구분하도록 고쳤어요.
+      <ul>
+        <li>RMC가 무효(V)면 속도와 침로를 지워요.</li>
+      </ul>
+    </li>
+  </ul>
+  <p>관련 저장소: <a href="https://github.com/mapsea-project/RTK_SDK_iOS_Sample">RTK_SDK_iOS_Sample</a></p>
+</section>
+
+<section data-sources="S1 S2">
+  <h2>2. 진행 현황</h2>
+  <h3>2.1 작업별 상태</h3>
+  <figure>
+    <table>
+      <thead>
+        <tr><th>작업</th><th>상태</th><th class="num">진척(%)</th><th>담당</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>장비 연결</td><td>완료</td><td class="num">100</td><td>김개발</td></tr>
+        <tr><td>보정 중계</td><td>진행 중</td><td class="num">70</td><td>이개발</td></tr>
+        <tr><td>NMEA 파서</td><td>완료</td><td class="num">100</td><td>박개발</td></tr>
+        <tr><th colspan="2">전체</th><td class="num">90</td><td>3명</td></tr>
+      </tbody>
+    </table>
+    <figcaption>표 1. 작업별 진행 상태 (10월 17일 기준)</figcaption>
+  </figure>
+  <h3>2.2 화면</h3>
+  <figure>
+    <img src="sources/screen.png" alt="데모 앱 지도 화면" width="160">
+    <figcaption>그림 1. 데모 앱 지도 화면</figcaption>
+  </figure>
+</section>
+
+<section data-sources="S2">
+  <h2>3. 다음 주 계획</h2>
+  <ol>
+    <li>지도 화면의 선박 도형 회전을 마무리해요.</li>
+    <li>출력 형식별 검증을 진행해요.
+      <ol>
+        <li>PDF: Chrome</li>
+        <li>DOCX·Pages: Word 스타일</li>
+      </ol>
+    </li>
+  </ol>
+  <h4>위험 요소</h4>
+  <p>Codex 샌드박스에서 앱 제어가 막힐 수 있어요.</p>
+</section>
+</body>
+</html>
